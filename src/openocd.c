@@ -31,6 +31,7 @@
 #include "openocd.h"
 #include <jtag/driver.h>
 #include <jtag/jtag.h>
+#include <interface/bitbang.h>
 #include <transport/transport.h>
 #include <helper/ioutil.h>
 #include <helper/util.h>
@@ -46,7 +47,6 @@
 #ifdef HAVE_STRINGS_H
 #include <strings.h>
 #endif
-
 
 #define OPENOCD_VERSION \
 		"Open On-Chip Debugger " VERSION RELSTR " (" PKGBLDDATE ")"
@@ -275,6 +275,7 @@ struct command_context *setup_command_handler(Jim_Interp *interp)
 		&log_register_commands,
 		&transport_register_commands,
 		&interface_register_commands,
+		&bitbang_register_commands,
 		&target_register_commands,
 		&flash_register_commands,
 		&nand_register_commands,
