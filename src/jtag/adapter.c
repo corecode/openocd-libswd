@@ -12,6 +12,9 @@
  *   Copyright (C) 2009 Zachary T Welch                                    *
  *   zw@superlucidity.net                                                  *
  *                                                                         *
+ *   Copyright (C) 2011 Tomasz Boleslaw CEDRO                              *
+ *   cederom@tlen.pl, http://www.tomek.cedro.info                          *
+ *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
  *   the Free Software Foundation; either version 2 of the License, or     *
@@ -189,6 +192,67 @@ COMMAND_HANDLER(handle_interface_command)
 				CMD_ARGV[0]);
 	CALL_COMMAND_HANDLER(handle_interface_list_command);
 	return ERROR_JTAG_INVALID_INTERFACE;
+}
+
+/** Interface signals handling routine that can add, delete and list signals.
+ * Signal ADD requires signal name string and 32-bit mask, optionally a value.
+ * Values are read as HEX. Signal DEL requires only signal name to delete.
+ * Signal LIST will show marvelous table wits signal names, masks and values.
+ * Interfaces should be defined in configuration file by TCL interface.
+ * Parameters are checked before function execution.
+ */
+COMMAND_HANDLER(handle_interface_signal_command)
+{
+	LOG_DEBUG("%s", __func__);
+
+	if (!jtag_interface){
+		command_print(CMD_CTX, "You must initialize interface first!");
+		return ERROR_FAIL;
+	}
+
+	if (CMD_ARGC<1 || CMD_ARGC>3){
+		command_print(CMD_CTX, "Bad syntax!");
+		return ERROR_COMMAND_SYNTAX_ERROR;
+	}
+
+	int sigmask;
+	char signame[32];
+
+	if (!strncasecmp(CMD_ARGV[0], "add", 3)){
+		if (!strncpy(signame, CMD_ARGV[1], 32)){
+			LOG_ERROR("Unable to copy signal name from parameter list!");
+			return ERROR_FAIL;
+		}
+		// We are going to add interface signal.
+		// Check the mask parameter.
+		if (!sscanf(CMD_ARGV[2], "%x", &sigmask)){
+			LOG_ERROR("Bad signal mask parameter! Use HEX value.");
+			return ERROR_COMMAND_SYNTAX_ERROR;
+		}
+		// Now add the inetrface signal with specified parameters.
+		return oocd_interface_signal_add(signame, sigmask);
+
+	} else if (!strncasecmp(CMD_ARGV[0], "del", 3)){
+		// We are going to delete specified signal.
+		return oocd_interface_signal_del(signame);
+
+	} else if (!strncasecmp(CMD_ARGV[0], "list", 4)){
+		//We are going to list available signals.
+		oocd_interface_signal_t *sig;
+		sig=jtag_interface->signal;
+		command_print(CMD_CTX, "      Interface Signal Name      |    Mask    |   Value   ");
+		command_print(CMD_CTX, "----------------------------------------------------------");
+		while (sig) {
+			command_print(CMD_CTX, "%32s | 0x%08X | 0x%08X", sig->name, sig->mask, sig->value);
+			sig=sig->next;
+		}
+		// Also print warning if interface driver does not support bit-baning.
+		if (!jtag_interface->bitbang) command_print(CMD_CTX, "WARNING: This interface does not support bit-baning!");
+		return ERROR_OK;
+	}
+	// For unknown parameter print error and return error code.
+	command_print(CMD_CTX, "Unknown parameter!");
+	return ERROR_COMMAND_SYNTAX_ERROR;
 }
 
 COMMAND_HANDLER(handle_reset_config_command)
@@ -499,6 +563,13 @@ static const struct command_registration interface_command_handlers[] = {
 		.handler = handle_interface_list_command,
 		.mode = COMMAND_ANY,
 		.help = "List all built-in debug adapter interfaces (drivers)",
+	},
+	{
+		.name = "interface_signal",
+		.handler = handle_interface_signal_command,
+		.mode = COMMAND_ANY,
+		.help = "List, Remove or Add interface signal with mask and value",
+		.usage = "(add|del|list) signal_name [mask]",
 	},
 	{
 		.name = "reset_config",
