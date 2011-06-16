@@ -8,6 +8,9 @@
  *   Copyright (C) 2009 Zachary T Welch                                    *
  *   zw@superlucidity.net                                                  *
  *                                                                         *
+ *   Copyright (C) 2011 Tomasz Boleslaw CEDRO                              *
+ *   cederom@tlen.pl, http://www.tomek.cedro.info                          *
+ *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
  *   the Free Software Foundation; either version 2 of the License, or     *
@@ -27,6 +30,7 @@
 #define OPENOCD_JTAG_INTERFACE_H
 
 #include <jtag/jtag.h>
+#include <interface/interface.h>
 
 /* @file
  * The "Cable Helper API" is what the cable drivers can use to help
@@ -206,10 +210,8 @@ struct jtag_interface {
 	unsigned supported;
 #define DEBUG_CAP_TMS_SEQ	(1 << 0)
 
-	/** transports supported in C code (NULL terminated vector) */
+	/** supported transport names in C code (NULL terminated vector) */
 	const char **transports;
-
-	const struct swd_driver *swd;
 
 	/**
 	 * Execute queued commands.
@@ -218,7 +220,13 @@ struct jtag_interface {
 	int (*execute_queue)(void);
 
 	/**
-	 * Set the interface speed.
+	 * Set the transport clock speed code.
+	 * @a speed is usually the internal interface clock source divisor value
+	 * that directly impacts transport TCK/CLK frequency. If you want to
+	 * specify clock frequency in kHz, you must first calculate it with
+	 * @a khz() function. Using speed==-1 enables adaptive clocking based
+	 * on RTCK signal (however not all devices support this feature).
+	 *
 	 * @param speed The new interface speed setting.
 	 * @returns ERROR_OK on success, or an error code on failure.
 	 */
@@ -252,19 +260,23 @@ struct jtag_interface {
 	int (*quit)(void);
 
 	/**
-	 * Returns JTAG maxium speed for KHz. 0 = RTCK. The function returns
-	 *  a failure if it can't support the KHz/RTCK.
+	 * Calculates jtag_speed value for given transport clock frequency 
+	 * specified in kHz. @a jtag_speed is usually the internal interface clock
+	 * source divisor value that directly impacts transport TCK/CLK frequency.
+	 * For @a jtag_speed=0 adaptive clocking is used, based on RTCK signal.
+	 * Function returns error code if an interface does not support kHz/RTCK.
 	 *
 	 *  WARNING!!!! if RTCK is *slow* then think carefully about
 	 *  whether you actually want to support this in the driver.
 	 *  Many target scripts are written to handle the absence of RTCK
 	 *  and use a fallback kHz TCK.
+	 *
 	 * @returns ERROR_OK on success, or an error code on failure.
 	 */
 	int (*khz)(int khz, int* jtag_speed);
 
 	/**
-	 * Calculate the clock frequency (in KHz) for the given @a speed.
+	 * Calculates transport clock frequency (in KHz) for given @a speed.
 	 * @param speed The desired interface speed setting.
 	 * @param khz On return, contains the speed in KHz (0 for RTCK).
 	 * @returns ERROR_OK on success, or an error code if the
@@ -298,6 +310,21 @@ struct jtag_interface {
 	 * @returns ERROR_OK on success, or an error code on failure.
 	 */
 	int (*srst_asserted)(int* srst_asserted);
+
+	/* TC@201105: THESE FUNCTIONS BELOW ARE TEMPORARY UGLY PROOF OF CONCEPT FOR
+	 * TRANSPORTS OTHER THAN JTAG. NO USE OF GLOBALS SHOULD TAKE PLACE ;-)
+	 * Note: This structure should be calloc'ed to NULL all pointers at init.
+	 */
+	/** current transport */
+	struct transport *transport;
+	/** Generic bitstream transfer from/into char bits array. */
+	int (*transfer)(void *device, int bits, char *mosidata, char *misodata);
+	/** Generic signal set/get bitbang operation. */
+	int (*bitbang)(void *device, char *signal, int SETnGET, int *value);
+	/** Signals that are defined at runtime by driver initialization routine. */
+	oocd_interface_signal_t *signal;
+	/** Target device that interface is connected to/working with at the moment. */
+	struct target *target;
 };
 
 
