@@ -1,15 +1,18 @@
-/***************************************************************************
+/**************************************************************************
 *   Copyright (C) 2009 by Øyvind Harboe                                   *
-*	Øyvind Harboe <oyvind.harboe@zylin.com>                               *
+*	Øyvind Harboe <oyvind.harboe@zylin.com>                              *
 *                                                                         *
 *   Copyright (C) 2009 by SoftPLC Corporation.  http://softplc.com        *
-*	Dick Hollenbeck <dick@softplc.com>                                    *
+*	Dick Hollenbeck <dick@softplc.com>                                   *
 *                                                                         *
 *   Copyright (C) 2004, 2006 by Dominic Rath                              *
 *   Dominic.Rath@gmx.de                                                   *
 *                                                                         *
 *   Copyright (C) 2008 by Spencer Oliver                                  *
 *   spen@spen-soft.co.uk                                                  *
+*                                                                         *
+*   Copyright (C) 2011 Tomasz Boleslaw CEDRO                              *
+*   cederom@tlen.pl, http://www.tomek.cedro.info                          *
 *                                                                         *
 *   This program is free software; you can redistribute it and/or modify  *
 *   it under the terms of the GNU General Public License as published by  *
@@ -81,6 +84,7 @@
 
 /* project specific includes */
 #include <jtag/interface.h>
+#include <interface/interface.h>
 #include <transport/transport.h>
 #include <helper/time_support.h>
 
@@ -593,6 +597,102 @@ static int ft2232_read(uint8_t* buf, uint32_t size, uint32_t* bytes_read)
 
 	return ERROR_OK;
 }
+
+/** Generic IO BITBANG Port Manipulation Routine.
+ * It can read and write port state using signal names. Each interface have its
+ * own specific signal names and fields. This function works on those fields
+ * and based on their values talks to the FT*232 chip on the interface device.
+ * ft2232 drivers use {low,high}_{output,direction} global variables to remember
+ * port direction and value, so we need to work on them as well not to change
+ * any other pin with our bit-baning performed only on selected pins.
+ * The function name 'bitbang' reflects ability to change selected pin states.
+ *
+ * @Note: FT2232 has special mechanism called MPSSE for serial communications
+ * that is far more efficient than pure 'bitbang' mode on this device family. 
+ * Although our function is named 'bitbang' it does not use bitbang mode.
+ * MPSSE command send value and port bytes on port write, but does not on read.
+ * This happens every time we want to change pin value, so we need to use cache.
+ * On write we want to OR direction mask already set by init() procedure
+ * to mark bit-mask output. On read we want to clear bits given by mask
+ * to mark them input. To read we need to write/update port state first.
+ * Long story short: to read data we first need to set pins to input.
+ *
+ * @Warning: reading and writing will set pin direction input or output,
+ * so it is possible to disable basic data output pins with bad masking,
+ * but also gives chance to create and manage full TCL signal description,
+ * that can be used to take advantage of some additional interface hardware
+ * features installed on some devices (i.e. ADC, power supply, etc).
+ * This gives new way of signal handling that is still backward-compatible.
+ *
+ * \param *device void pointer to pass additional driver information to the routine.
+ * \param signal is the string representation of the signal mask stored in layout structure.
+ * \param GETnSET if zero then perform read operation, write otherwise.
+ * \param *value is the pointer that holds the value.
+ * \return ERROR_OK on success, or ERROR_FAIL on failure.
+ */
+int ft2232_bitbang(void *device, char *signal_name, int GETnSET, int *value){
+	uint8_t  buf[3];
+	int retval, vall=0, valh=0;
+	unsigned int sigmask;
+	uint32_t bytes_written, bytes_read;
+	oocd_interface_signal_t *sig;
+
+	//First get the signal mask, or return error if signal not defined.
+	if (!(sig=oocd_interface_signal_find(signal_name))){
+		LOG_ERROR("Requested signal not found on this interface!");
+		return ERROR_FAIL;
+	}
+	// Pin mask is also related with port direction and complicates it!!!
+	sigmask=sig->mask;
+
+	if (!GETnSET){
+		// We will SET port pins selected by sigmask.
+		// Modify our pins value, but remember about other pins and their previous value
+		low_output  = (low_output & ~sigmask) | ((*value & sigmask) & 0x0ff);
+		high_output = (high_output & ~(sigmask>>8)) | (((*value & sigmask)>>8) & 0x0ff);
+		// Modify our pins direction, but remember about other pins and their previous direction
+		low_direction  |= sigmask & 0x0ff;
+		high_direction |= (sigmask>>8) & 0x0ff;
+		// Now send those settings to the interface chip
+		buf[0] = 0x80;	//Set Data Bits LowByte
+		buf[1] = low_output;
+		buf[2] = low_direction;
+		if ((retval=ft2232_write(buf, 3, &bytes_written)) != ERROR_OK) return retval;
+		buf[0] = 0x82;   //Set Data Bits HighByte
+		buf[1] = high_output;
+		buf[2] = high_direction;
+		if ((retval=ft2232_write(buf, 3, &bytes_written)) != ERROR_OK) return retval;
+		sig->value = ((high_output<<8) | low_output) & sig->mask;
+	} else {
+		// Modify our pins value, but remember about other pins and their previous value
+		// DO WE REALLY NEED TO PULL-UP PINS TO READ THEIR STATE OR SIMPLY LEAVE AS IS?
+		//low_output  = (low_output & ~sigmask) | (sigmask & 0x0ff);
+		//high_output = (high_output & ~sigmask) | (sigmask>>8) & 0x0ff);
+		// Modify our pins direction to input, but remember about other pins and their previous direction
+		low_direction  &= ~(sigmask);
+		high_direction &= ~(sigmask>>8);
+		// Now send those settings to the interface chip
+		// First change desired pins to input
+		buf[0] = 0x80;	//Set Data Bits LowByte
+		buf[1] = low_output;
+		buf[2] = low_direction;
+		if ((retval=ft2232_write(buf, 3, &bytes_written)) != ERROR_OK) return retval;
+		buf[0] = 0x82;   //Set Data Bits HighByte
+		buf[1] = high_output;
+		buf[2] = high_direction;
+		if ((retval=ft2232_write(buf, 3, &bytes_written)) != ERROR_OK) return retval;
+		// Then read pins designated by a signal mask
+		buf[0]=0x81;	//Read Data Bits LowByte.
+		if ((retval=ft2232_write(buf, 1, &bytes_written)) != ERROR_OK) return retval;
+		if ((retval=ft2232_read((uint8_t *)&vall, 1, &bytes_read)) != ERROR_OK) return retval;
+		buf[0]=0x83;	//Read Data Bits HighByte.
+		if ((retval=ft2232_write(buf, 1, &bytes_written)) != ERROR_OK) return retval;
+		if ((retval=ft2232_read((uint8_t *)&valh, 1, &bytes_read)) != ERROR_OK) return retval;
+		sig->value = *value = ((valh<<8)|vall) & sig->mask; //Join result bytes and apply signal bitmask
+	}
+	return ERROR_OK;
+}
+
 
 static bool ft2232_device_is_highspeed(void)
 {
@@ -4486,4 +4586,5 @@ struct jtag_interface ft2232_interface = {
 	.speed_div = ft2232_speed_div,
 	.khz = ft2232_khz,
 	.execute_queue = ft2232_execute_queue,
+	.bitbang = ft2232_bitbang,
 };
