@@ -55,7 +55,7 @@ COMMAND_HANDLER(handle_bitbang_command)
 	LOG_DEBUG("%s", __func__);
 
 	if (!jtag_interface){
-		LOG_ERROR("You need to setup interface first!");
+		LOG_ERROR("You need to select interface first!");
 		return ERROR_FAIL;
 	}
 
@@ -77,17 +77,17 @@ COMMAND_HANDLER(handle_bitbang_command)
 	static oocd_interface_signal_t *sig;
 	static unsigned int pn;
 	static int retval;
-	static char *mark, *signame, *sigval, pcmd[45];
+	static char *mark, *signame, *sigval, pcmd[OOCD_BITBANG_PARAM_CMD_MAX_LEN];
 
 	// Iterate through list of command parameters
 	for (pn=0;pn<CMD_ARGC;pn++){
 		// Make a local copy of parameter command to work on
-		if (!strncpy(pcmd, CMD_ARGV[pn], 45)){
+		if (!strncpy(pcmd, CMD_ARGV[pn], OOCD_BITBANG_PARAM_CMD_MAX_LEN)){
 			LOG_ERROR("Cannot copy parameter: %s", CMD_ARGV[pn]);
 			return ERROR_FAIL;
 		}
 		// Look for '=' mark to see if read or write will happen
-		mark=strnstr(pcmd, "=", 45);
+		mark=strstr(pcmd, "=");
 		if (!mark){
 			// If no '=' was found then we read the signal value
 			// Check if specified signal exists
@@ -138,8 +138,8 @@ static const struct command_registration bitbang_commands[] = {
 	{
 		.name = "bitbang",
 		.handler = handle_bitbang_command,
-		.mode = COMMAND_ANY,
-		.help =  "Perform bit-bang operations on interface signals (mask!).",
+		.mode = COMMAND_EXEC,
+		.help =  "Perform bit-bang operations on interface signal (mask!).",
 		.usage = "'signal_name' to read, 'signal_name'='port_hex_value' to write.",
 	},
 	COMMAND_REGISTRATION_DONE

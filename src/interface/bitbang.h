@@ -22,6 +22,7 @@
 /** @file Simple framework to work with interface signals.
  */
 
+#define OOCD_BITBANG_PARAM_CMD_MAX_LEN 45
 int bitbang_register_commands(struct command_context *ctx);
 
 #endif
