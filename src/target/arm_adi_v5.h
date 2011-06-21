@@ -5,6 +5,8 @@
  *   Copyright (C) 2008 by Spencer Oliver                                  *
  *   spen@spen-soft.co.uk                                                  *
  *                                                                         *
+ *   Copyright (C) 2011 Tomasz Boleslaw CEDRO <cederom@tlen.pl>            *
+ *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
  *   the Free Software Foundation; either version 2 of the License, or     *
@@ -137,10 +139,12 @@ struct adiv5_dap
 {
 	const struct dap_ops *ops;
 
+	/** Context to store DAP specific settings and operations. */
+	void *ctx;
+
 	struct arm_jtag *jtag_info;
 	/* Control config */
 	uint32_t dp_ctrl_stat;
-
 
 	uint32_t apsel;
 
@@ -182,7 +186,19 @@ struct adiv5_dap
 	 * MEM-AP access before we try to read its status (and/or result).
 	 */
 	uint32_t	memaccess_tck;
-	/* Size of TAR autoincrement block, ARM ADI Specification requires at least 10 bits */
+	/* Size of TAR autoincrement block, ARM ADI Specification requires at least 10 bits.
+	 *
+	 * TC@20110521: According to ARM ADIv5 (page 185) "TAR holds a 32-bit address".
+	 * TC@20110521: According to ARM ADIv5 (page 140) "Automatic address increment
+	 * is only guaranteed to operate on the bottom 10-bits of the
+	 * address held in the TAR. Auto address incrementing of bit [10] and beyond
+	 * is IMPLEMENTATION DEFINED. This means that auto address incrementing at
+	 * a 1KB boundary is IMPLEMENTATION DEFINED. For example, if TAR[31:0] is set
+	 * to 0x14A4, and the access size is word, successive accesses to the DRW
+	 * increment TAR to 0x14A8, 0x14AC, and so on, up to the end of the 1KB range
+	 * at 0x17FC. At this point, the auto-increment behavior on the next DRW access
+	 * is IMPLEMENTATION DEFINED."
+	 */
 	uint32_t tar_autoincr_block;
 };
 
