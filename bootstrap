@@ -1,9 +1,9 @@
 #!/bin/sh
-# Run the autotools bootstrap sequence to create the configure script
-
+# Bootstrap script fetches external git submodules and run autotools.
 # Abort execution on error
 set -e
 
+# Check if libtool is installed and what version.
 if which libtoolize > /dev/null; then
     libtoolize="libtoolize"
 elif which glibtoolize >/dev/null; then
@@ -13,6 +13,8 @@ else
     exit 1
 fi
 
+# Submodules are external libraries downloaded from remote git repositories.
+# To be build automaticaly with OpenOCD. Do we want to skip submodules?
 if [ "$1" = "nosubmodule" ]; then
     SKIP_SUBMODULE=1
 elif [ -n "$1" ]; then
@@ -21,7 +23,16 @@ elif [ -n "$1" ]; then
     exit 1
 fi
 
-# bootstrap the autotools
+if [ -n "$SKIP_SUBMODULE" ]; then
+    echo "Skipping submodule setup"
+else
+    echo "Setting up submodules"
+    git submodule init
+    git submodule update
+fi
+
+
+# Bootstrap the autotools (create Makefie.in files and configure script).
 (
 set -x
 aclocal
@@ -33,15 +44,6 @@ automake --gnu --add-missing --copy
 
 # AM_MAINTAINER_MODE requires --enable-maintainer-mode from everyone using
 # current source snapshots (working from GIT, or some source snapshot, etc)
-# otherwise the documentation will fail to build due to missing version.texi
-
-if [ -n "$SKIP_SUBMODULE" ]; then
-    echo "Skipping submodule setup"
-else
-    echo "Setting up submodules"
-    git submodule init
-    git submodule update
-fi
-
+# otherwise the documentation will fail to build due to missing version.texi.
 echo "Bootstrap complete. Quick build instructions:"
 echo "./configure --enable-maintainer-mode ...."
