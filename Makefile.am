@@ -9,10 +9,12 @@ nobase_dist_pkgdata_DATA = \
 	contrib/libdcc/README \
 	contrib/openocd.udev
 
-if INTERNAL_JIMTCL
-SUBDIRS = jimtcl
-else
 SUBDIRS =
+if INTERNAL_JIMTCL
+SUBDIRS += jimtcl
+endif
+if INTERNAL_LIBSWD
+SUBDIRS += submodules/libswd
 endif
 
 SUBDIRS += src doc
