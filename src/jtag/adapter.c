@@ -219,6 +219,10 @@ COMMAND_HANDLER(handle_interface_signal_command)
 	char signame[32];
 
 	if (!strncasecmp(CMD_ARGV[0], "add", 3)){
+		if (CMD_ARGC<3){
+			LOG_ERROR("Usage: interface_signal add signal_name signal_mask");
+			return ERROR_FAIL;
+		}
 		if (!strncpy(signame, CMD_ARGV[1], 32)){
 			LOG_ERROR("Unable to copy signal name from parameter list!");
 			return ERROR_FAIL;
@@ -233,8 +237,12 @@ COMMAND_HANDLER(handle_interface_signal_command)
 		return oocd_interface_signal_add(signame, sigmask);
 
 	} else if (!strncasecmp(CMD_ARGV[0], "del", 3)){
+		if (CMD_ARGC<2){
+			LOG_ERROR("Usage: interface_signal del signal_name");
+			return ERROR_FAIL;
+		}
 		// We are going to delete specified signal.
-		return oocd_interface_signal_del(signame);
+		return oocd_interface_signal_del((char *)CMD_ARGV[1]);
 
 	} else if (!strncasecmp(CMD_ARGV[0], "list", 4)){
 		//We are going to list available signals.
@@ -249,6 +257,21 @@ COMMAND_HANDLER(handle_interface_signal_command)
 		// Also print warning if interface driver does not support bit-baning.
 		if (!jtag_interface->bitbang) command_print(CMD_CTX, "WARNING: This interface does not support bit-baning!");
 		return ERROR_OK;
+
+	} else if (!strncasecmp(CMD_ARGV[0], "find", 4)){
+		if (CMD_ARGC<2){
+			LOG_ERROR("Usage: interface_signal find signal_name");
+			return ERROR_FAIL;
+		}
+		// Find the signal and print its details.
+		oocd_interface_signal_t *sig;
+		if ( (sig=oocd_interface_signal_find((char *)CMD_ARGV[1])) != NULL ){
+			command_print(CMD_CTX, "%s: mask=0x%08X value=0x%08X", sig->name, sig->mask, sig->value);
+			return ERROR_OK;
+		}
+		// Or return information and error if not found.
+		command_print(CMD_CTX, "Signal not found!");
+		return ERROR_FAIL;
 	}
 	// For unknown parameter print error and return error code.
 	command_print(CMD_CTX, "Unknown parameter!");
@@ -568,8 +591,8 @@ static const struct command_registration interface_command_handlers[] = {
 		.name = "interface_signal",
 		.handler = handle_interface_signal_command,
 		.mode = COMMAND_ANY,
-		.help = "List, Remove or Add interface signal with mask and value",
-		.usage = "(add|del|list) signal_name [mask]",
+		.help = "List, Find, Remove and Add interface signal mask",
+		.usage = "(add|del|find|list) signal_name [mask]",
 	},
 	{
 		.name = "reset_config",
