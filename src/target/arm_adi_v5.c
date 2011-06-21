@@ -10,6 +10,8 @@
  *                                                                         *
  *   Copyright (C) 2009-2010 by David Brownell                             *
  *                                                                         *
+ *   Copyright (C) 2011 Tomasz Boleslaw CEDRO <cederom@tlen.pl>            *                                                       *
+ *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
  *   the Free Software Foundation; either version 2 of the License, or     *
@@ -72,7 +74,12 @@
 #include "arm.h"
 #include "arm_adi_v5.h"
 #include <helper/time_support.h>
+#include <jtag/interface.h>
+#include <transport/transport.h>
 
+//We need to have access to information on other layers such as transport etc
+//these are kept in global interface structure for now. Change ASAP.
+extern struct jtag_interface *jtag_interface;
 
 /* ARM ADI Specification requires at least 10 bits used for TAR autoincrement  */
 
@@ -964,6 +971,8 @@ int mem_ap_sel_write_buf_u32(struct adiv5_dap *swjdp, uint8_t ap,
 */
 extern const struct dap_ops jtag_dp_ops;
 
+extern const struct dap_ops swd_dap_ops;
+
 /*--------------------------------------------------------------------------*/
 
 /**
@@ -977,6 +986,8 @@ extern const struct dap_ops jtag_dp_ops;
  * for SWD transports not just JTAG; that will need to address differences
  * in layering.  (JTAG is useful without any debug target; but not SWD.)
  * And this may not even use an AHB-AP ... e.g. DAP-Lite uses an APB-AP.
+ * TC@VI2011: As for now transport specific function set is selected in this
+ *  function, as dap->ops is just a set of commands performed on a transport.
  */
 int ahbap_debugport_init(struct adiv5_dap *dap)
 {
@@ -989,9 +1000,24 @@ int ahbap_debugport_init(struct adiv5_dap *dap)
 	/* JTAG-DP or SWJ-DP, in JTAG mode
 	 * ... for SWD mode this is patched as part
 	 * of link switchover
-	 */
-	if (!dap->ops)
-		dap->ops = &jtag_dp_ops;
+	 *
+	 * if (!dap->ops)
+	 *	dap->ops = &jtag_dp_ops;
+      */
+
+     /** Here we connect transport-specific function set to work with DAP.
+      * Transport initialization is also part of interface initialization.
+      * Target must select which transport to use (if supports many of them).
+      * If SWD transport is not selected JTAG is set here as default.
+      */
+     if ((strncmp(jtag_interface->transport->name, "swd", 3)==0)) {
+             LOG_INFO("Selecting SWD transport command set.");
+             dap->ops = &swd_dap_ops;
+     } else {
+             LOG_INFO("Selecting JTAG transport command set.");
+             dap->ops = &jtag_dp_ops;
+     }
+
 
 	/* Default MEM-AP setup.
 	 *
@@ -1088,7 +1114,7 @@ int dap_get_debugbase(struct adiv5_dap *dap, int ap,
 {
 	uint32_t ap_old;
 	int retval;
-	uint32_t dbgbase, apid;
+	uint32_t dbgbase, apid, idcode;
 
 	/* AP address is in bits 31:24 of DP_SELECT */
 	if (ap >= 256)
@@ -1110,8 +1136,10 @@ int dap_get_debugbase(struct adiv5_dap *dap, int ap,
 	/* Excavate the device ID code */
 	struct jtag_tap *tap = dap->jtag_info->tap;
 	while (tap != NULL) {
-		if (tap->hasidcode)
+		if (tap->hasidcode) {
+			idcode = tap->idcode;
 			break;
+		}
 		tap = tap->next_tap;
 	}
 	if (tap == NULL || !tap->hasidcode)
