@@ -49,19 +49,34 @@ struct transport {
 	const char *name;
 
 	/**
-	 * When a transport is selected, this method registers
-	 * its commands and activates the transport (e.g. resets
-	 * the link).
+	 * Each transport can have its own context to operate and store internals.
+	 * Transport implementation/library can use it to store config, queue, etc.
+	 * In more advanced modular configuration each component has its own
+	 * context for internal representation and functional data exchange.
+	 * Context is stored using *void type for more flexibility and
+	 * architecture/library independent design. 
+	 */
+	void *ctx;
+
+	/**
+	 * Implements transport "select" command, activating the transport to be
+	 * used in this debug session from among the set supported by the debug
+	 * adapter being used.  When a transport is selected, this method registers
+	 * its commands and activates the transport (ie. allocates memory,
+	 * initializes external libraries, prepares queue, resets the link).
+	 * Note that "select" only prepares transport for use, but does not
+	 * operate on target as "init" does (ie. interrogates scan chain) and is
+	 * called before "init". "Select" should be called only once per session.
 	 *
-	 * After those commands are registered, they will often
-	 * be used for further configuration of the debug link.
+	 * Note (TC@20110524): Should we allow multiple transport switching in future?
 	 */
 	int (*select)(struct command_context *ctx);
 
 	/**
-	 * server startup uses this method to validate transport
-	 * configuration.  (For example, with JTAG this interrogates
-	 * the scan chain against the list of expected TAPs.)
+	 * Implements transport "init" used by server startup to validate transport
+	 * configuration (ie. JTAG/SWD interrogates the scan chain against the list
+	 * of expected devices) and must be called after transport is already
+	 * "selected".
 	 */
 	int (*init)(struct command_context *ctx);
 
@@ -70,6 +85,8 @@ struct transport {
 	 */
 	struct transport *next;
 };
+
+typedef struct transport oocd_transport_t;
 
 int transport_register(struct transport *new_transport);
 

@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2010 by David Brownell
+ * Copyright (c) 2011 Tomasz Boleslaw CEDRO <cederom@tlen.pl>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -44,7 +45,7 @@
 
 #include <helper/log.h>
 
-#include <transport/transport.h>
+#include "transport.h"
 
 extern struct command_context *global_cmd_ctx;
 
@@ -66,24 +67,25 @@ static struct transport *transport_list;
 static const char **allowed_transports;
 
 /** * The transport being used for the current OpenOCD session.  */
-static struct transport *session;
+static struct transport *session_transport;
 
-static  int transport_select(struct command_context *ctx, const char *name)
+static int transport_select(struct command_context *ctx, const char *name)
 {
+	int retval;
+	struct transport *t;
+
 	/* name may only identify a known transport;
-	 * caller guarantees session's transport isn't yet set.*/
-	for (struct transport *t = transport_list; t; t = t->next) {
-			if (strcmp(t->name, name) == 0) {
-				int retval = t->select(ctx);
-			/* select() registers commands specific to this
-			 * transport, and may also reset the link, e.g.
-			 * forcing it to JTAG or SWD mode.
-			 */
-			if (retval == ERROR_OK)
-				session = t;
-			else
-				LOG_ERROR("Error selecting '%s' as "
-					"transport", t->name);
+	 * caller guarantees session's transport isn't yet set.
+	 * TODO (TC): Never trust user supplied parameters, verification mechanism needed.
+	 */
+	for (t=transport_list; t ; t=t->next){
+		if (strcasecmp(t->name, name)==0){
+			retval=t->select(ctx);
+			if (retval==ERROR_OK){
+				session_transport=t;
+			} else {
+				LOG_ERROR("Error selecting '%s' as transport", t->name);
+			}
 			return retval;
 		}
 	}
@@ -109,24 +111,28 @@ int allow_transports(struct command_context *ctx, const char **vector)
 	 * of one transport; C code should be definitive about what
 	 * can be used when all goes well.
 	 */
-	if (allowed_transports != NULL || session) {
+
+	if (allowed_transports != NULL || session_transport) {
 		LOG_ERROR("Can't modify the set of allowed transports.");
 		return ERROR_FAIL;
 	}
 
+	if (vector[0]==NULL){
+		LOG_ERROR("Transports vector should contain at least one transport.");
+		return ERROR_FAIL;
+	}
 
 	allowed_transports = vector;
 
-	/* autoselect if there's no choice ... */
+	/* autoselect if there's only one choice ... */
 	if (!vector[1]) {
-		LOG_INFO("only one transport option; autoselect '%s'",
-				vector[0]);
-		return transport_select(ctx, vector [0]);
+		LOG_INFO("only one transport option; autoselect '%s'", vector[0]);
+		return transport_select(ctx, vector[0]);
 	} else {
 		/* guard against user config errors */
-		LOG_WARNING("must select a transport.");
+		LOG_WARNING("Transports added, now select one.");
 		while (*vector) {
-			LOG_DEBUG("allow transport '%s'", *vector);
+			LOG_DEBUG("allowing transport '%s'", *vector);
 			vector++;
 		}
 		return ERROR_OK;
@@ -137,7 +143,7 @@ int allow_transports(struct command_context *ctx, const char **vector)
 /**
  * Used to verify corrrect adapter driver initialization.
  *
- * @returns true iff the adapter declared one or more transports.
+ * @returns true if the adapter declared one or more transports.
  */
 bool transports_are_declared(void)
 {
@@ -145,18 +151,16 @@ bool transports_are_declared(void)
 }
 
 /**
- * Registers a transport.  There are general purpose transports
- * (such as JTAG), as well as relatively proprietary ones which are
- * specific to a given chip (or chip family).
+ * Registers a transport and prepend it to the transports list.
  *
- * Code implementing a transport needs to register it before it can
- * be selected and then activated.  This is a dynamic process, so
- * that chips (and families) can define transports as needed (without
- * nneeding error-prone static tables).
+ * Code implementing a transport needs to register it before it can be
+ * selected with @a select() function and then activated with @init() function.
+ * Transport registration is a dynamic process using function pointers
+ * and singly linked lists to avoid static tables.
+ * On successful execution old transport list becomes next element of the
+ * registered transport and new element a new pointer to the transport list.
  *
- * @param new_transport the transport being registered.  On a
- * successful return, this memory is owned by the transport framework.
- *
+ * @param new_transport transport being registered becomes new transport list.
  * @returns ERROR_OK on success, else a fault code.
  */
 int transport_register(struct transport *new_transport)
@@ -171,7 +175,8 @@ int transport_register(struct transport *new_transport)
 	}
 
 	if (!new_transport->select || !new_transport->init) {
-		LOG_ERROR("invalid transport %s", new_transport->name);
+		LOG_ERROR("invalid transport %s - no select() and init() defined!",
+											 new_transport->name);
 	}
 
 	/* splice this into the list */
@@ -190,9 +195,8 @@ int transport_register(struct transport *new_transport)
  */
 struct transport *get_current_transport(void)
 {
-
 	/* REVISIT -- constify */
-	return session;
+	return session_transport;
 }
 
 
@@ -253,12 +257,12 @@ fail:
 COMMAND_HANDLER(handle_transport_init)
 {
 	LOG_DEBUG("%s", __func__);
-	if (!session) {
+	if (!session_transport) {
 		LOG_ERROR("session's transport is not selected.");
 		return ERROR_FAIL;
 	}
 
-	return session->init(CMD_CTX);
+	return session_transport->init(CMD_CTX);
 }
 
 COMMAND_HANDLER(handle_transport_list)
@@ -284,16 +288,16 @@ static int jim_transport_select(Jim_Interp *interp, int argc, Jim_Obj *const *ar
 {
 	switch (argc) {
 	case 1:			/* return/display */
-		if (!session) {
+		if (!session_transport) {
 			LOG_ERROR("session's transport is not selected.");
 			return JIM_ERR;
 		} else {
-			Jim_SetResultString(interp, session->name, -1);
+			Jim_SetResultString(interp, session_transport->name, -1);
 			return JIM_OK;
 		}
 		break;
 	case 2:			/* assign */
-	if (session) {
+	if (session_transport) {
 		/* can't change session's transport after-the-fact */
 		LOG_ERROR("session's transport is already selected.");
 		return JIM_ERR;
@@ -353,7 +357,7 @@ static const struct command_registration transport_commands[] = {
 	COMMAND_REGISTRATION_DONE
 };
 
-static const struct command_registration transport_group[] = {
+static const struct command_registration transport_commands_group[] = {
 	{
 		.name = "transport",
 		.mode = COMMAND_ANY,
@@ -366,5 +370,5 @@ static const struct command_registration transport_group[] = {
 
 int transport_register_commands(struct command_context *ctx)
 {
-	return register_commands(ctx, NULL, transport_group);
+	return register_commands(ctx, NULL, transport_commands_group);
 }
