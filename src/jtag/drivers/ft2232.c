@@ -694,6 +694,39 @@ int ft2232_bitbang(void *device, char *signal_name, int GETnSET, int *value){
 }
 
 
+/** Transfer bits in/out stored in char array starting from LSB/[0],
+ * if you want to make MSB-first shift put data in reverse order into array.
+ * \param *device void pointer to pass driver details to the function.
+ * \param bits is the number of bits (char array elements) to transfer.
+ * \param *mosidata pointer to char array with data to be send.
+ * \param *misodata pointer to char array with data to be received.
+ * \return number of bits sent on success, or ERROR_FAIL on failure. 
+ */
+int ft2232_transfer(void *device, int bits, char *mosidata, char *misodata){
+	uint8_t  buf[3];
+	int retval, bit;
+	uint32_t bytes_written, bytes_read;
+
+	//No optimization for now, simply send one bit from one char element.
+	for (bit=0;bit<bits;bit++){
+		buf[0]=0x3e;			// Clock Data Bits In and Out LSb first.
+		buf[1]=1;				// One bit per element.
+		buf[2]=mosidata[bit];	// Take data from supplied array.
+		retval=ft2232_write(buf, 3, &bytes_written);
+		if (retval<0){
+			LOG_ERROR("ft2232_write() returns %d", retval);
+			return ERROR_FAIL;
+		}
+		retval=ft2232_read((uint8_t *)&misodata[bit], 1, &bytes_read);
+		if (retval<0){
+			LOG_ERROR("ft2232_read() returns %d", retval);
+			return ERROR_FAIL;
+		}
+	}
+	return bit;
+}
+
+
 static bool ft2232_device_is_highspeed(void)
 {
 #if BUILD_FT2232_FTD2XX == 1
