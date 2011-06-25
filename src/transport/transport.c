@@ -69,6 +69,10 @@ static const char **allowed_transports;
 /** * The transport being used for the current OpenOCD session.  */
 static struct transport *session_transport;
 
+/** Transport names definitions. */
+const char *oocd_transport_jtag_only[] = { "jtag", NULL };
+const char *oocd_transport_swd_only[]  = { "swd" , NULL };
+
 static int transport_select(struct command_context *ctx, const char *name)
 {
 	int retval;

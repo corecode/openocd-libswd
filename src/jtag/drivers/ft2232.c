@@ -4683,7 +4683,7 @@ struct jtag_interface ft2232_interface = {
 	.name = "ft2232",
 	.supported = DEBUG_CAP_TMS_SEQ,
 	.commands = ft2232_command_handlers,
-	.transports = jtag_only,
+	.transports = oocd_transport_jtag_only,
 
 	.init = ft2232_init,
 	.quit = ft2232_quit,

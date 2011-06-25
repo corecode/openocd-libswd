@@ -1384,7 +1384,7 @@ int adapter_init(struct command_context *cmd_ctx)
 		LOG_ERROR("Adapter driver '%s' did not declare "
 			"which transports it allows; assuming "
 			"JTAG-only", jtag->name);
-		retval = allow_transports(cmd_ctx, jtag_only);
+		retval = allow_transports(cmd_ctx, oocd_transport_jtag_only);
 		if (retval != ERROR_OK)
 			return retval;
 	}

@@ -328,8 +328,6 @@ struct jtag_interface {
 };
 
 
-extern const char *jtag_only[];
-
 extern const struct swd_driver *swd;
 
 #endif // OPENOCD_JTAG_INTERFACE_H

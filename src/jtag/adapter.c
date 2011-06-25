@@ -50,7 +50,6 @@
  */
 
 extern struct jtag_interface *jtag_interface;
-const char *jtag_only[] = { "jtag", NULL };
 
 static int
 jim_adapter_name(Jim_Interp *interp, int argc, Jim_Obj *const *argv)
@@ -169,7 +168,7 @@ COMMAND_HANDLER(handle_interface_command)
 			"which transports it allows; assuming "
 			"legacy JTAG-only", jtag_interface->name);
 		retval = allow_transports(CMD_CTX, jtag_interface->transports
-						? jtag_interface->transports : jtag_only);
+						? jtag_interface->transports : oocd_transport_jtag_only);
 			if (ERROR_OK != retval)
 				return retval;
 

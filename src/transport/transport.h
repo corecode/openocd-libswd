@@ -17,8 +17,8 @@
  * Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#ifndef TRANSPORT_H
-#define TRANSPORT_H
+#ifndef OOCD_TRANSPORT_H
+#define OOCD_TRANSPORT_H
 
 #include "helper/command.h"
 
@@ -99,5 +99,10 @@ COMMAND_HELPER(transport_list_parse, char ***vector);
 int allow_transports(struct command_context *ctx, const char **vector);
 
 bool transports_are_declared(void);
+
+extern const char *oocd_transport_jtag_only[];
+extern const char *oocd_transport_swd_only[];
+
+
 
 #endif
