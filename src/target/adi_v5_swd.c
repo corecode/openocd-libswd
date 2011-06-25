@@ -53,7 +53,7 @@
 #include <transport/transport.h>
 #include <jtag/interface.h>
 
-#include <jtag/swd.h>
+#include <transport/swd.h>
 
 
 

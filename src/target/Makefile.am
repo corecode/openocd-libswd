@@ -85,13 +85,13 @@ ARM_DEBUG_SRC = \
 	arm_semihosting.c \
 	arm_adi_v5.c \
  	adi_v5_jtag.c \
-	adi_v5_swd.c \
 	embeddedice.c \
 	trace.c \
 	etb.c \
 	etm.c \
 	$(OOCD_TRACE_FILES) \
 	etm_dummy.c
+#	adi_v5_swd.c 
 
 AVR32_SRC = \
 	avr32_ap7k.c \

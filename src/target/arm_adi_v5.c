@@ -10,7 +10,8 @@
  *                                                                         *
  *   Copyright (C) 2009-2010 by David Brownell                             *
  *                                                                         *
- *   Copyright (C) 2011 Tomasz Boleslaw CEDRO <cederom@tlen.pl>            *                                                       *
+ *   Copyright (C) 2011 Tomasz Boleslaw CEDRO                              *
+ *   cederom@tlen.pl, http://www.tomek.cedro.info                          *
  *                                                                         *
  *   This program is free software; you can redistribute it and/or modify  *
  *   it under the terms of the GNU General Public License as published by  *
@@ -76,6 +77,7 @@
 #include <helper/time_support.h>
 #include <jtag/interface.h>
 #include <transport/transport.h>
+#include <transport/swd.h>
 
 //We need to have access to information on other layers such as transport etc
 //these are kept in global interface structure for now. Change ASAP.
