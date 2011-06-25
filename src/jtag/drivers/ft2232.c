@@ -166,12 +166,20 @@ static unsigned		ft2232_max_tck = FTDI_2232C_MAX_TCK;
 static uint16_t ft2232_vid[MAX_USB_IDS + 1] = { 0x0403, 0 };
 static uint16_t ft2232_pid[MAX_USB_IDS + 1] = { 0x6010, 0 };
 
+/** This structure describes different layout of FT2232 based devices. */
 struct ft2232_layout {
+	/// Layout name
 	char* name;
+	/// Lyout specific initialization routine
 	int (*init)(void);
+	/// Layout specific reset routine
 	void (*reset)(int trst, int srst);
+	/// Layout specific LED blink routine
 	void (*blink)(void);
+	/// Which FTDI channel does this layout use
 	int channel;
+	/// This will forbid bitbanging selected port pins
+	int bitbang_deny;
 };
 
 /* init procedures for supported layouts */
@@ -644,6 +652,12 @@ int ft2232_bitbang(void *device, char *signal_name, int GETnSET, int *value){
 	}
 	// Pin mask is also related with port direction and complicates it!!!
 	sigmask=sig->mask;
+
+	// First check against restricted port pins defined by the interface layout
+	if (sigmask & layout->bitbang_deny){
+		LOG_ERROR("This interface does not allow to bit-bang selected pins (0x%08X)!", layout->bitbang_deny);
+		return ERROR_FAIL;
+	}
 
 	if (!GETnSET){
 		// We will SET port pins selected by sigmask.
