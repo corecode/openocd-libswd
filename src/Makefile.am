@@ -31,6 +31,12 @@ else
 openocd_LDADD += -ljim
 endif
 
+if INTERNAL_LIBSWD
+openocd_LDADD += $(top_builddir)/submodules/libswd/src/libswd.la
+else
+openocd_LDADD += -lswd
+endif
+
 libopenocd_la_SOURCES = \
 	hello.c \
 	openocd.c \
