@@ -1,0 +1,309 @@
+/*
+ * $Id$
+ *
+ * SWD Transport Body File for OpenOCD.
+ *
+ * Copyright (C) 2010-2011, Tomasz Boleslaw CEDRO (http://www.tomek.cedro.info)
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ * 1. Redistributions of source code must retain the above copyright notice,
+ *    this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ *    this list of conditions and the following disclaimer in the documentation
+ *    and/or other materials provided with the distribution.
+ * 3. Neither the name of the Tomasz Boleslaw CEDRO nor the names of its
+ *    contributors may be used to endorse or promote products derived from this
+ *    software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS
+ * BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY,
+ * OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER
+ * IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
+ * OF THE POSSIBILITY OF SUCH DAMAGE.*
+ *
+ * Written by Tomasz Boleslaw CEDRO <cederom@tlen.pl>, 2010-2011;
+ *
+ */
+
+/** \file swd.c SWD Transport Body File for OpenOCD.
+ * SWD Transport Layer creates bridge between target and the interface driver
+ * functions. Target functions create high level operations on the device's
+ * DAP (Debug Access Port), while interface driver passes electrical signals
+ * in and out of the physical device. Transport is implemented using LibSWD,
+ * and external open-source SWD framework.
+ */
+
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
+
+#include <transport/swd.h>
+#include <target/arm_adi_v5.h>
+#include <jtag/interface.h> //we want this here to use extern global *interface
+#include <transport/transport.h>
+
+///Unfortunalety OpenOCD use globals to pass information so we need to use it too.
+extern struct jtag_interface *jtag_interface;
+extern const struct dap_ops swd_dp_ops;
+static struct transport swd_transport;
+
+/** @{ swd_arm_adi_v5 Function set to support existing ARM ADI v5 target's
+ * infrastructure.
+ */
+
+int swd_queue_idcode_read(struct adiv5_dap *dap, uint8_t *ack, uint32_t *data){
+	int retval;
+	retval=swd_dp_read_idcode(dap->ctx, SWD_OPERATION_ENQUEUE, (int **)&data);
+	if (retval<0) {
+		LOG_ERROR("swd_dp_read_idcode() error: %s ", swd_error_string(retval));
+		return ERROR_FAIL;
+	} else return ERROR_OK; 
+}
+
+int swd_queue_dp_read(struct adiv5_dap *dap, unsigned reg, uint32_t *data){
+	int retval;
+	retval=swd_dp_read((swd_ctx_t *)dap->ctx, SWD_OPERATION_ENQUEUE, reg, (int **)&data);
+	if (retval<0){
+		LOG_ERROR("swd_dp_read() error: %s ", swd_error_string(retval));
+		return ERROR_FAIL;
+	}
+	return ERROR_OK;
+}
+
+int swd_queue_dp_write(struct adiv5_dap *dap, unsigned reg, uint32_t data){
+	int retval;
+	retval=swd_dp_write((swd_ctx_t *)dap->ctx, SWD_OPERATION_ENQUEUE, (char) reg, (int *) &data);
+	if (retval<0){
+		LOG_ERROR("swd_dp_write() error: %s ", swd_error_string(retval));
+		return ERROR_FAIL;
+	}
+	return ERROR_OK;
+}
+
+int swd_queue_ap_read(struct adiv5_dap *dap, unsigned reg, uint32_t *data){
+	int retval;
+	retval=swd_ap_read((swd_ctx_t *)dap->ctx, SWD_OPERATION_ENQUEUE, (char) reg, (int **) &data);
+	if (retval<0){
+		LOG_ERROR("swd_ap_read() error: %s ", swd_error_string(retval));
+		return ERROR_FAIL;
+	}
+	return ERROR_OK;
+}
+
+int swd_queue_ap_write(struct adiv5_dap *dap, unsigned reg, uint32_t data){
+	int retval;
+	retval=swd_ap_write((swd_ctx_t *)dap->ctx, SWD_OPERATION_ENQUEUE, (char) reg, (int *) &data);
+	if (retval<0){
+		LOG_ERROR("swd_ap_write() error: %s ", swd_error_string(retval));
+		return ERROR_FAIL;
+	}
+	return ERROR_OK;
+}
+
+int swd_queue_ap_abort(struct adiv5_dap *dap, uint8_t *ack){
+	//int retval;
+	//char reg=SWD_DP_ABORT_ADDR;
+     LOG_ERROR("not yet implemented");
+	return ERROR_FAIL;
+}
+
+int swd_run(struct adiv5_dap *dap){
+	int retval;
+	retval=swd_cmdq_flush((swd_ctx_t *)dap->ctx, SWD_OPERATION_EXECUTE);
+	if (retval<0){
+		LOG_ERROR("swd_cmdq_flush() error: %s", swd_error_string(retval));
+		return retval;
+	} else return ERROR_OK;
+}
+
+const struct dap_ops swd_dap_ops = {
+	.is_swd = true,
+
+	.queue_idcode_read = swd_queue_idcode_read,
+	.queue_dp_read = swd_queue_dp_read,
+	.queue_dp_write = swd_queue_dp_write,
+	.queue_ap_read = swd_queue_ap_read,
+	.queue_ap_write = swd_queue_ap_write,
+	.queue_ap_abort = swd_queue_ap_abort,
+	.run = swd_run,
+};
+
+
+// Transport select prepares selected transport for later use and bus/target initialization.
+// TODO: We are operating on global interface pointer, change it into function parameter asap.
+int swd_transport_init(struct command_context *ctx){
+	LOG_DEBUG("%s",__func__);
+	int retval, *idcode;
+
+	//struct target *target = get_current_target(ctx);
+	//struct arm *arm = target_to_arm(target);
+	//struct adiv5_dap *dap = arm->dap;
+
+	/**
+	 * Initialize the driver to work with selected transport.
+	 * Because we can work on existing context there is no need to destroy it,
+	 * as it can be used on next try.
+	 */
+	retval=swd_dap_detect((swd_ctx_t *)jtag_interface->transport->ctx, SWD_OPERATION_EXECUTE, &idcode);
+	if (retval<0) {
+          LOG_ERROR("swd_dap_detect() error %d (%s)", retval, swd_error_string(retval));
+          return retval;
+     }
+
+     LOG_INFO("SWD transport initialization complete. Found IDCODE=0x%08X.", *idcode);
+	return ERROR_OK;
+}
+
+/**
+ * Select SWD transport on interface pointed by global *jtag_interface structure.
+ * Select is assumed to be called before transport init. It prepares everything,
+ * including interface buffers, context memory and command set for higher layers,
+ * but does not interrogate target device (with IDCODE read).
+ */
+int swd_transport_select(struct command_context *ctx){
+	LOG_DEBUG("%s",__func__);
+	int retval;
+
+     jtag_interface->transport=&swd_transport;
+	//struct target *target = get_current_target(ctx);
+	// retval = register_commands(ctx, NULL, swd_handlers);
+
+     // Create SWD_CTX if nesessary
+	if (!jtag_interface->transport->ctx){
+		/** Transport was not yet initialized. */
+		jtag_interface->transport->ctx=swd_init();
+		if (jtag_interface->transport->ctx==NULL) {
+			LOG_ERROR("Cannot initialize SWD context!");
+			return ERROR_FAIL;
+		}
+		LOG_INFO("New SWD context initialized at 0x%08X", (int)&jtag_interface->transport->ctx);
+	} else LOG_INFO("Working on existing transport context at 0x%0X...", (int)&jtag_interface->transport->ctx);
+
+     // Select SWD DAP by sending JTAG-TO-SWD sequence on the transport layer
+	retval=swd_dap_select((swd_ctx_t *)jtag_interface->transport->ctx, SWD_OPERATION_EXECUTE);
+	if (retval<0) {
+		LOG_ERROR("swd_dap_select() error: %s", swd_error_string(retval));
+		return ERROR_FAIL;
+	} 
+
+     LOG_DEBUG("SWD Transport selection complete...");
+	return ERROR_OK;
+}
+
+
+
+static struct transport swd_transport = {
+     .name = "swd",
+     .select = swd_transport_select,
+     .init = swd_transport_init,
+     .ctx = NULL,
+     .next = NULL
+};
+
+static void swd_constructor(void) __attribute__((constructor));
+static void swd_constructor(void)
+{
+             transport_register(&swd_transport);
+}
+
+/** Returns true if the current debug session
+ * is using SWD as its transport.
+ */
+bool transport_is_swd(void)
+{
+	return get_current_transport() == &swd_transport;
+}
+
+/** Returns true if the current debug session
+ *  * is using SWD as its transport.
+ *   */
+//bool transport_is_swd(void)
+//{
+//             return get_current_transport() == &swd_transport;
+//}
+
+
+
+
+
+
+
+///////////////////////////////////////////////////////////////////////////////
+// BELOW UGLY FUNCTIONS TO MAKE OLD THINGS WORK AND COMPILE, REMOVE THEM ASAP
+///////////////////////////////////////////////////////////////////////////////
+
+#include <target/arm.h>
+
+/*
+ * This represents the bits which must be sent out on TMS/SWDIO to
+ * switch a DAP implemented using an SWJ-DP module into SWD mode.
+ * These bits are stored (and transmitted) LSB-first.
+ *
+ * See the DAP-Lite specification, section 2.2.5 for information
+ * about making the debug link select SWD or JTAG.  (Similar info
+ * is in a few other ARM documents.)
+ */
+static const uint8_t jtag2swd_bitseq[] = {
+	/* More than 50 TCK/SWCLK cycles with TMS/SWDIO high,
+	 * putting both JTAG and SWD logic into reset state.
+	 */
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+	/* Switching sequence enables SWD and disables JTAG
+	 * NOTE: bits in the DP's IDCODE may expose the need for
+	 * an old/obsolete/deprecated sequence (0xb6 0xed).
+	 */
+	0x9e, 0xe7,
+	/* More than 50 TCK/SWCLK cycles with TMS/SWDIO high,
+	 * putting both JTAG and SWD logic into reset state.
+	 */
+	0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+};
+
+
+
+/**
+ * Put the debug link into SWD mode, if the target supports it.
+ * The link's initial mode may be either JTAG (for example,
+ * with SWJ-DP after reset) or SWD.
+ *
+ * @param target Enters SWD mode (if possible).
+ *
+ * Note that targets using the JTAG-DP do not support SWD, and that
+ * some targets which could otherwise support it may have have been
+ * configured to disable SWD signaling
+ *
+ * @return ERROR_OK or else a fault code.
+ */
+int dap_to_swd(struct target *target)
+{
+	struct arm *arm = target_to_arm(target);
+	int retval;
+
+	LOG_DEBUG("Enter SWD mode");
+
+	/* REVISIT it's ugly to need to make calls to a "jtag"
+	 * subsystem if the link may not be in JTAG mode...
+	 */
+
+	retval =  jtag_add_tms_seq(8 * sizeof(jtag2swd_bitseq),
+			jtag2swd_bitseq, TAP_INVALID);
+	if (retval == ERROR_OK)
+		retval = jtag_execute_queue();
+
+	/* set up the DAP's ops vector for SWD mode. */
+	arm->dap->ops = &swd_dap_ops;
+
+	return retval;
+}
+
+
+
+/** @} */
