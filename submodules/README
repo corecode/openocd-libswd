@@ -1,0 +1,2 @@
+Submodules are external utilities or libraries downloaded from external git
+repositories to be built with OpenOCD. Submodules are handled by bootstrap.

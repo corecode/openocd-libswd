@@ -1,17 +1,9 @@
 #!/bin/sh
 # Bootstrap script fetches external git submodules and run autotools.
+# Autotools create configure script and prepare Makefiles.
+
 # Abort execution on error
 set -e
-
-# Check if libtool is installed and what version.
-if which libtoolize > /dev/null; then
-    libtoolize="libtoolize"
-elif which glibtoolize >/dev/null; then
-    libtoolize="glibtoolize"
-else
-    echo "$0: Error: libtool is required" >&2
-    exit 1
-fi
 
 # Submodules are external libraries downloaded from remote git repositories.
 # To be build automaticaly with OpenOCD. Do we want to skip submodules?
@@ -31,6 +23,15 @@ else
     git submodule update
 fi
 
+# Check if libtool is installed and what version.
+if which libtoolize > /dev/null; then
+    libtoolize="libtoolize"
+elif which glibtoolize >/dev/null; then
+    libtoolize="glibtoolize"
+else
+    echo "$0: Error: libtool is required" >&2
+    exit 1
+fi
 
 # Bootstrap the autotools (create Makefie.in files and configure script).
 (
