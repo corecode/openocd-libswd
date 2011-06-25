@@ -53,10 +53,10 @@ extern struct jtag_interface parport_interface;
 extern struct jtag_interface dummy_interface;
 #endif
 #if BUILD_FT2232_FTD2XX == 1
-extern struct jtag_interface ft2232_interface;
+extern struct jtag_interface ft2232_interface, ft2232_interface_swd;
 #endif
 #if BUILD_FT2232_LIBFTDI == 1
-extern struct jtag_interface ft2232_interface;
+extern struct jtag_interface ft2232_interface, ft2232_interface_swd;
 #endif
 #if BUILD_USB_BLASTER_LIBFTDI == 1 || BUILD_USB_BLASTER_FTD2XX == 1
 extern struct jtag_interface usb_blaster_interface;
@@ -102,6 +102,10 @@ extern struct jtag_interface buspirate_interface;
  *
  * The list should be defined to contain either one minidriver interface
  * or some number of standard driver interfaces, never both.
+ *
+ * TC: This list also contain swd interface. To be verified is separate list
+ *  is necessary, or rename jtag_interfaces into oocd_interfaces (and use
+ *  transport layer list to select and initialize proper transport...
  */
 struct jtag_interface *jtag_interfaces[] = {
 #if BUILD_ZY1000 == 1
@@ -116,10 +120,10 @@ struct jtag_interface *jtag_interfaces[] = {
 		&dummy_interface,
 #endif
 #if BUILD_FT2232_FTD2XX == 1
-		&ft2232_interface,
+		&ft2232_interface, &ft2232_interface_swd,
 #endif
 #if BUILD_FT2232_LIBFTDI == 1
-		&ft2232_interface,
+		&ft2232_interface, &ft2232_interface_swd,
 #endif
 #if BUILD_USB_BLASTER_LIBFTDI == 1 || BUILD_USB_BLASTER_FTD2XX == 1
 		&usb_blaster_interface,
