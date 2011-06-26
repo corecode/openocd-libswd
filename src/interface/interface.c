@@ -45,7 +45,7 @@ oocd_interface_signal_t *oocd_interface_signal_find(char *name){
 	}
 	// Check if interface signal to already exists
 	if (!jtag_interface->signal){
-		LOG_DEBUG("No interface signals defined.");
+		LOG_DEBUG("No interface signals defined (yet?).");
 		return NULL;
 	}
 	// Check if signal name is correct
@@ -64,7 +64,7 @@ oocd_interface_signal_t *oocd_interface_signal_find(char *name){
 		sig=sig->next;
 	}
 	// If signal is not found return null pointer.
-	LOG_DEBUG("Signal %s not defined.", name);
+	LOG_DEBUG("Signal %s not defined (yet?).", name);
 	return NULL;
 }
 /** Add new signal to the interface.
