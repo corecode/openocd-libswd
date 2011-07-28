@@ -38,6 +38,7 @@ extern struct jtag_interface *jtag_interface;
  * \return pointer to signal structure in memory if found, NULL otherwise.
  */
 oocd_interface_signal_t *oocd_interface_signal_find(char *name){
+	LOG_DEBUG("Searching for signal \"%s\"", name);
 	// Check if interface already exists
 	if (!jtag_interface){
 		LOG_ERROR("Interface does not yet exist!");
@@ -64,7 +65,7 @@ oocd_interface_signal_t *oocd_interface_signal_find(char *name){
 		sig=sig->next;
 	}
 	// If signal is not found return null pointer.
-	LOG_DEBUG("Signal %s not defined (yet?).", name);
+	LOG_DEBUG("Signal %s not (yet) defined.", name);
 	return NULL;
 }
 /** Add new signal to the interface.
@@ -81,6 +82,7 @@ oocd_interface_signal_t *oocd_interface_signal_find(char *name){
  * \return ERROR_OK on success or ERROR_FAIL on failure.
  */
 int oocd_interface_signal_add(char *name, unsigned int mask){
+	LOG_DEBUG("Adding signal \"%s\"", name);
 	// Check if interface already exists
 	if (!jtag_interface){
 		LOG_ERROR("Interface does not yet exist!");
@@ -138,6 +140,7 @@ int oocd_interface_signal_add(char *name, unsigned int mask){
 		    	while(lastsignal->next) {lastsignal=lastsignal->next;}
 			lastsignal->next=newsignal;
 		}
+		LOG_DEBUG("Signal \"%s\" added.", name);
 		return ERROR_OK;
 	}
 
@@ -153,6 +156,7 @@ int oocd_interface_signal_add(char *name, unsigned int mask){
  * \return ERROR_OK on success, ERROR_FAIL on failure.
  */
 int oocd_interface_signal_del(char *name){
+	LOG_DEBUG("Deleting signal \"%s\"", name);
 	// Check if interface already exists
 	if (!jtag_interface){
 		LOG_ERROR("Interface does not yet exist!");
@@ -198,6 +202,7 @@ int oocd_interface_signal_del(char *name){
 	//now free memory of detached element
 	free(delsig->name);
 	free(delsig);
+	LOG_DEBUG("Signal \"%s\" removed.", name);
 	return ERROR_OK;
 }
 
