@@ -973,8 +973,6 @@ int mem_ap_sel_write_buf_u32(struct adiv5_dap *swjdp, uint8_t ap,
 */
 extern const struct dap_ops jtag_dp_ops;
 
-extern const struct dap_ops swd_dap_ops;
-
 /*--------------------------------------------------------------------------*/
 
 /**
@@ -1014,7 +1012,7 @@ int ahbap_debugport_init(struct adiv5_dap *dap)
       */
      if ((strncmp(jtag_interface->transport->name, "swd", 3)==0)) {
              LOG_INFO("Selecting SWD transport command set.");
-             dap->ops = &swd_dap_ops;
+             dap->ops = (struct dap_ops *)&oocd_dap_ops_swd;
      } else {
              LOG_INFO("Selecting JTAG transport command set.");
              dap->ops = &jtag_dp_ops;
