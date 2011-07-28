@@ -3,7 +3,8 @@
  *
  * SWD Transport Body File for OpenOCD.
  *
- * Copyright (C) 2010-2011, Tomasz Boleslaw CEDRO (http://www.tomek.cedro.info)
+ * Copyright (C) 2011 Tomasz Boleslaw CEDRO
+ * cederom@tlen.pl, http://www.tomek.cedro.info
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -46,20 +47,17 @@
 #endif
 
 #include <transport/swd.h>
-#include <target/arm_adi_v5.h>
 #include <jtag/interface.h> //we want this here to use extern global *interface
-#include <transport/transport.h>
+#include <unistd.h>
 
 ///Unfortunalety OpenOCD use globals to pass information so we need to use it too.
 extern struct jtag_interface *jtag_interface;
-extern const struct dap_ops swd_dp_ops;
-static struct transport swd_transport;
 
 /** @{ swd_arm_adi_v5 Function set to support existing ARM ADI v5 target's
  * infrastructure.
  */
 
-int swd_queue_idcode_read(struct adiv5_dap *dap, uint8_t *ack, uint32_t *data){
+int oocd_swd_queue_idcode_read(struct adiv5_dap *dap, uint8_t *ack, uint32_t *data){
 	int retval;
 	retval=swd_dp_read_idcode(dap->ctx, SWD_OPERATION_ENQUEUE, (int **)&data);
 	if (retval<0) {
@@ -68,7 +66,7 @@ int swd_queue_idcode_read(struct adiv5_dap *dap, uint8_t *ack, uint32_t *data){
 	} else return ERROR_OK; 
 }
 
-int swd_queue_dp_read(struct adiv5_dap *dap, unsigned reg, uint32_t *data){
+int oocd_swd_queue_dp_read(struct adiv5_dap *dap, unsigned reg, uint32_t *data){
 	int retval;
 	retval=swd_dp_read((swd_ctx_t *)dap->ctx, SWD_OPERATION_ENQUEUE, reg, (int **)&data);
 	if (retval<0){
@@ -78,7 +76,7 @@ int swd_queue_dp_read(struct adiv5_dap *dap, unsigned reg, uint32_t *data){
 	return ERROR_OK;
 }
 
-int swd_queue_dp_write(struct adiv5_dap *dap, unsigned reg, uint32_t data){
+int oocd_swd_queue_dp_write(struct adiv5_dap *dap, unsigned reg, uint32_t data){
 	int retval;
 	retval=swd_dp_write((swd_ctx_t *)dap->ctx, SWD_OPERATION_ENQUEUE, (char) reg, (int *) &data);
 	if (retval<0){
@@ -88,7 +86,7 @@ int swd_queue_dp_write(struct adiv5_dap *dap, unsigned reg, uint32_t data){
 	return ERROR_OK;
 }
 
-int swd_queue_ap_read(struct adiv5_dap *dap, unsigned reg, uint32_t *data){
+int oocd_swd_queue_ap_read(struct adiv5_dap *dap, unsigned reg, uint32_t *data){
 	int retval;
 	retval=swd_ap_read((swd_ctx_t *)dap->ctx, SWD_OPERATION_ENQUEUE, (char) reg, (int **) &data);
 	if (retval<0){
@@ -98,7 +96,7 @@ int swd_queue_ap_read(struct adiv5_dap *dap, unsigned reg, uint32_t *data){
 	return ERROR_OK;
 }
 
-int swd_queue_ap_write(struct adiv5_dap *dap, unsigned reg, uint32_t data){
+int oocd_swd_queue_ap_write(struct adiv5_dap *dap, unsigned reg, uint32_t data){
 	int retval;
 	retval=swd_ap_write((swd_ctx_t *)dap->ctx, SWD_OPERATION_ENQUEUE, (char) reg, (int *) &data);
 	if (retval<0){
@@ -108,14 +106,14 @@ int swd_queue_ap_write(struct adiv5_dap *dap, unsigned reg, uint32_t data){
 	return ERROR_OK;
 }
 
-int swd_queue_ap_abort(struct adiv5_dap *dap, uint8_t *ack){
+int oocd_swd_queue_ap_abort(struct adiv5_dap *dap, uint8_t *ack){
 	//int retval;
 	//char reg=SWD_DP_ABORT_ADDR;
      LOG_ERROR("not yet implemented");
 	return ERROR_FAIL;
 }
 
-int swd_run(struct adiv5_dap *dap){
+int oocd_swd_run(struct adiv5_dap *dap){
 	int retval;
 	retval=swd_cmdq_flush((swd_ctx_t *)dap->ctx, SWD_OPERATION_EXECUTE);
 	if (retval<0){
@@ -124,23 +122,11 @@ int swd_run(struct adiv5_dap *dap){
 	} else return ERROR_OK;
 }
 
-const struct dap_ops swd_dap_ops = {
-	.is_swd = true,
-
-	.queue_idcode_read = swd_queue_idcode_read,
-	.queue_dp_read = swd_queue_dp_read,
-	.queue_dp_write = swd_queue_dp_write,
-	.queue_ap_read = swd_queue_ap_read,
-	.queue_ap_write = swd_queue_ap_write,
-	.queue_ap_abort = swd_queue_ap_abort,
-	.run = swd_run,
-};
-
 
 // Transport select prepares selected transport for later use and bus/target initialization.
 // TODO: We are operating on global interface pointer, change it into function parameter asap.
-int swd_transport_init(struct command_context *ctx){
-	LOG_DEBUG("%s",__func__);
+int oocd_swd_transport_init(struct command_context *ctx){
+	LOG_DEBUG("entering function...");
 	int retval, *idcode;
 
 	//struct target *target = get_current_target(ctx);
@@ -165,14 +151,16 @@ int swd_transport_init(struct command_context *ctx){
 /**
  * Select SWD transport on interface pointed by global *jtag_interface structure.
  * Select is assumed to be called before transport init. It prepares everything,
- * including interface buffers, context memory and command set for higher layers,
- * but does not interrogate target device (with IDCODE read).
+ * including context memory and command set for higher layers, but not hardware
+ * and does not interrogate target device (with IDCODE read that is done by
+ * transport init call). This function does not touch the hardware because
+ * hardware use signals that are not yet read from config file at this point!
  */
-int swd_transport_select(struct command_context *ctx){
-	LOG_DEBUG("%s",__func__);
+int oocd_swd_transport_select(struct command_context *ctx){
+	LOG_DEBUG("entering function...");
 	int retval;
 
-     jtag_interface->transport=&swd_transport;
+     jtag_interface->transport=(struct transport *)&oocd_transport_swd;
 	//struct target *target = get_current_target(ctx);
 	// retval = register_commands(ctx, NULL, swd_handlers);
 
@@ -184,34 +172,47 @@ int swd_transport_select(struct command_context *ctx){
 			LOG_ERROR("Cannot initialize SWD context!");
 			return ERROR_FAIL;
 		}
-		LOG_INFO("New SWD context initialized at 0x%08X", (int)&jtag_interface->transport->ctx);
+		LOG_INFO("New SWD context initialized at 0x%08X", (int)jtag_interface->transport->ctx);
 	} else LOG_INFO("Working on existing transport context at 0x%0X...", (int)&jtag_interface->transport->ctx);
 
-     // Select SWD DAP by sending JTAG-TO-SWD sequence on the transport layer
-	retval=swd_dap_select((swd_ctx_t *)jtag_interface->transport->ctx, SWD_OPERATION_EXECUTE);
-	if (retval<0) {
-		LOG_ERROR("swd_dap_select() error: %s", swd_error_string(retval));
+	retval=swd_log_level_inherit(jtag_interface->transport->ctx, debug_level);
+	if (retval<0){
+		LOG_ERROR("Unable to set log level: %s", swd_error_string(retval));
 		return ERROR_FAIL;
 	} 
-
      LOG_DEBUG("SWD Transport selection complete...");
 	return ERROR_OK;
 }
 
 
-
-static struct transport swd_transport = {
+struct transport oocd_transport_swd = {
      .name = "swd",
-     .select = swd_transport_select,
-     .init = swd_transport_init,
+     .select = oocd_swd_transport_select,
+     .init = oocd_swd_transport_init,
      .ctx = NULL,
-     .next = NULL
+     .next = NULL,
 };
 
+const struct dap_ops oocd_dap_ops_swd = {
+	.is_swd = true,
+
+	.queue_idcode_read = oocd_swd_queue_idcode_read,
+	.queue_dp_read = oocd_swd_queue_dp_read,
+	.queue_dp_write = oocd_swd_queue_dp_write,
+	.queue_ap_read = oocd_swd_queue_ap_read,
+	.queue_ap_write = oocd_swd_queue_ap_write,
+	.queue_ap_abort = oocd_swd_queue_ap_abort,
+	.run = oocd_swd_run,
+};
+
+
+
+
+/** Register SWD Transport at program startup. */
 static void swd_constructor(void) __attribute__((constructor));
 static void swd_constructor(void)
 {
-             transport_register(&swd_transport);
+             transport_register((struct transport *)&oocd_transport_swd);
 }
 
 /** Returns true if the current debug session
@@ -219,7 +220,7 @@ static void swd_constructor(void)
  */
 bool transport_is_swd(void)
 {
-	return get_current_transport() == &swd_transport;
+	return get_current_transport() == &oocd_transport_swd;
 }
 
 /** Returns true if the current debug session
@@ -227,7 +228,7 @@ bool transport_is_swd(void)
  *   */
 //bool transport_is_swd(void)
 //{
-//             return get_current_transport() == &swd_transport;
+//             return get_current_transport() == &oocd_transport_swd;
 //}
 
 
@@ -299,7 +300,7 @@ int dap_to_swd(struct target *target)
 		retval = jtag_execute_queue();
 
 	/* set up the DAP's ops vector for SWD mode. */
-	arm->dap->ops = &swd_dap_ops;
+	arm->dap->ops = &oocd_dap_ops_swd;
 
 	return retval;
 }

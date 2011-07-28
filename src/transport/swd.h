@@ -3,7 +3,8 @@
  *
  * SWD Transport Header File for OpenOCD.
  *
- * Copyright (C) 2010-2011, Tomasz Boleslaw CEDRO (http://www.tomek.cedro.info)
+ * Copyright (C) 2011 Tomasz Boleslaw CEDRO
+ * cederom@tle.pl, http://www.tomek.cedro.info
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -36,4 +37,19 @@
 /** \file swd.h SWD Transport Header File for OpenOCD. */
 
 #include <libswd.h>
+#include <transport/transport.h>
+#include <target/arm_adi_v5.h>
+
+int oocd_swd_queue_idcode_read(struct adiv5_dap *dap, uint8_t *ack, uint32_t *data);
+int oocd_swd_queue_dp_read(struct adiv5_dap *dap, unsigned reg, uint32_t *data);
+int oocd_swd_queue_dp_write(struct adiv5_dap *dap, unsigned reg, uint32_t data);
+int oocd_swd_queue_ap_read(struct adiv5_dap *dap, unsigned reg, uint32_t *data);
+int oocd_swd_queue_ap_write(struct adiv5_dap *dap, unsigned reg, uint32_t data);
+int oocd_swd_queue_ap_abort(struct adiv5_dap *dap, uint8_t *ack);
+int oocd_swd_run(struct adiv5_dap *dap);
+int oocd_swd_transport_init(struct command_context *ctx);
+int oocd_swd_transport_select(struct command_context *ctx);
+
+extern struct transport oocd_transport_swd;
+extern const struct dap_ops oocd_dap_ops_swd;
 

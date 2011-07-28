@@ -3,7 +3,8 @@
  *
  * Driver Bridge between LibSWD and OpenOCD.
  *
- * Copyright (C) 2010-2011, Tomasz Boleslaw CEDRO (http://www.tomek.cedro.info)
+ * Copyright (C) 2010-2011 Tomasz Boleslaw CEDRO
+ * cederom@tlen.pl, http://www.tomek.cedro.info
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -41,6 +42,7 @@
 #include <helper/log.h>
 #include <jtag/interface.h>
 #include <helper/log.h>
+#include <helper/command.h>
 
 /** OpenOCD as for now use global pointer to driver structure. */
 extern struct jtag_interface *jtag_interface;
@@ -56,6 +58,7 @@ extern struct jtag_interface *jtag_interface;
  * \return data count transferred, or negative SWD_ERROR code on failure.
  */
 int swd_drv_mosi_8(swd_ctx_t *swdctx, swd_cmd_t *cmd, char *data, int bits, int nLSBfirst){
+ LOG_DEBUG("OpenOCD's swd_drv_mosi_8(swdctx=@0x%08X, cmd=@0x%08X, data=0x%08X, bits=%d, nLSBfirst=0x%02X)", (int)swdctx, (int)cmd, *data, bits, nLSBfirst);
  if (data==NULL) return SWD_ERROR_NULLPOINTER;
  if (bits<0 && bits>8) return SWD_ERROR_PARAM;
  if (nLSBfirst!=0 && nLSBfirst!=1) return SWD_ERROR_PARAM;
@@ -67,7 +70,7 @@ int swd_drv_mosi_8(swd_ctx_t *swdctx, swd_cmd_t *cmd, char *data, int bits, int 
  /* Split output data into char array. */
  for (i=0;i<8;i++) mosidata[(nLSBfirst==SWD_DIR_LSBFIRST)?(i):(7-i)]=((1<<i)&(*data))?1:0; 
  /* Then send that array into interface hardware. */
- res=jtag_interface->transfer(NULL, bits, mosidata, misodata);
+ res=jtag_interface->transfer(NULL, bits, mosidata, misodata, 0);
  if (res<0) return SWD_ERROR_DRIVER;
 
  return i;
@@ -84,6 +87,7 @@ int swd_drv_mosi_8(swd_ctx_t *swdctx, swd_cmd_t *cmd, char *data, int bits, int 
  * \return data count transferred, or negative SWD_ERROR code on failure.
  */
 int swd_drv_mosi_32(swd_ctx_t *swdctx, swd_cmd_t *cmd, int *data, int bits, int nLSBfirst){
+ LOG_DEBUG("OpenOCD's swd_drv_mosi_32(swdctx=@0x%08X, cmd=@0x%02X, data=0x%08X, bits=%d, nLSBfirst=0x%02X)", (int)swdctx, (int)cmd, *data, bits, nLSBfirst);
  if (data==NULL) return SWD_ERROR_NULLPOINTER;
  if (bits<0 && bits>8) return SWD_ERROR_PARAM;
  if (nLSBfirst!=0 && nLSBfirst!=1) return SWD_ERROR_PARAM;
@@ -94,7 +98,7 @@ int swd_drv_mosi_32(swd_ctx_t *swdctx, swd_cmd_t *cmd, int *data, int bits, int 
 
  //UrJTAG drivers shift data LSB-First.
  for (i=0;i<32;i++) mosidata[(nLSBfirst==SWD_DIR_LSBFIRST)?(i):(31-i)]=((1<<i)&(*data))?1:0; 
- res=jtag_interface->transfer(NULL, bits, mosidata, misodata);
+ res=jtag_interface->transfer(NULL, bits, mosidata, misodata, 0);
  if (res<0) return SWD_ERROR_DRIVER;
  return i;
 }
@@ -118,11 +122,13 @@ int swd_drv_miso_8(swd_ctx_t *swdctx, swd_cmd_t *cmd, char *data, int bits, int 
  static signed int res;
  static char misodata[8], mosidata[8];
 
- res=jtag_interface->transfer(NULL, bits, mosidata, misodata);
+ // This function sends and reveice MSb-first.
+ res=jtag_interface->transfer(NULL, bits, mosidata, misodata, 0);
  if (res<0) return SWD_ERROR_DRIVER;
  /* Now we need to reconstruct the data byte from shifted in LSBfirst byte array. */
  *data=0;
  for (i=0;i<bits;i++) *data|=(misodata[(nLSBfirst==SWD_DIR_LSBFIRST)?(bits-1-i):(i)]?(1<<i):0);
+ LOG_DEBUG("OpenOCD's swd_drv_miso_8(swdctx=@0x%08X, cmd=@0x%08X, data=@0x%08X, bits=%d, nLSBfirst=0x%02X) reads: 0x%08X", (int)swdctx, (int)cmd, (int)data, bits, nLSBfirst, *data);
  return i;
 }
 
@@ -145,11 +151,13 @@ int swd_drv_miso_32(swd_ctx_t *swdctx, swd_cmd_t *cmd, int *data, int bits, int 
  static signed int res;
  static char misodata[32], mosidata[32];
 
- res=jtag_interface->transfer(NULL, bits, mosidata, misodata);
+ res=jtag_interface->transfer(NULL, bits, mosidata, misodata, 0);
  if (res<0) return SWD_ERROR_DRIVER;
  /* Now we need to reconstruct the data byte from shifted in LSBfirst byte array. */
  *data=0;
  for (i=0;i<bits;i++) *data|=(misodata[(nLSBfirst==SWD_DIR_LSBFIRST)?(bits-1-i):(i)]?(1<<i):0);
+ LOG_DEBUG("OpenOCD's swd_drv_miso_32(swdctx=@0x%08X, cmd=@0x%02X, data=@0x08%X, bits=%d, nLSBfirst=0x%02X) reads: 0x%08X", (int)swdctx, (int)cmd, (int)data, bits, nLSBfirst, *data);
+ LOG_DEBUG("OpenOCD's swd_drv_miso_32() reads: 0x%08X\n", *data);
  return i;
 }       
 
@@ -163,6 +171,7 @@ int swd_drv_miso_32(swd_ctx_t *swdctx, swd_cmd_t *cmd, int *data, int bits, int 
  * \return number of bits transmitted or negative SWD_ERROR code on failure. 
  */
 int swd_drv_mosi_trn(swd_ctx_t *swdctx, int bits){
+ LOG_DEBUG("OpenOCD's swd_drv_mosi_trn(swdctx=@0x%08X, bits=%d)\n", (int)swdctx, bits);
  if (bits<SWD_TURNROUND_MIN_VAL && bits>SWD_TURNROUND_MAX_VAL)
   return SWD_ERROR_TURNAROUND; 
 
@@ -173,7 +182,7 @@ int swd_drv_mosi_trn(swd_ctx_t *swdctx, int bits){
  if (res<0) return SWD_ERROR_DRIVER;
 
  /* Clock specified number of bits for proper TRN transaction. */
- res=jtag_interface->transfer(NULL, bits, buf, buf); 
+ res=jtag_interface->transfer(NULL, bits, buf, buf, 0); 
  if (res<0) return SWD_ERROR_DRIVER;
 
  return bits;
@@ -189,6 +198,7 @@ int swd_drv_mosi_trn(swd_ctx_t *swdctx, int bits){
  * \return number of bits transmitted or negative SWD_ERROR code on failure. 
  */
 int swd_drv_miso_trn(swd_ctx_t *swdctx, int bits){
+ LOG_DEBUG("OpenOCD's swd_drv_miso_trn(swdctx=@0x%08X, bits=%d)\n", (int)swdctx, bits);
  if (bits<SWD_TURNROUND_MIN_VAL && bits>SWD_TURNROUND_MAX_VAL)
   return SWD_ERROR_TURNAROUND; 
 
@@ -196,11 +206,11 @@ int swd_drv_miso_trn(swd_ctx_t *swdctx, int bits){
  static char buf[SWD_TURNROUND_MAX_VAL];
 
  /* Use driver method to set high (read) signal named RnW. */
- res=jtag_interface->bitbang(NULL, "RnW", 0, &val);
+ res=jtag_interface->bitbang(NULL, "RnW", 0xFFFFFFFF, &val);
  if (res<0) return SWD_ERROR_DRIVER;
 
  /* Clock specified number of bits for proper TRN transaction. */
- res=jtag_interface->transfer(NULL, bits, buf, buf); 
+ res=jtag_interface->transfer(NULL, bits, buf, buf, 0); 
  if (res<0) return SWD_ERROR_DRIVER;
  
  return bits;
@@ -215,6 +225,7 @@ int swd_drv_miso_trn(swd_ctx_t *swdctx, int bits){
  * \return SWD_OK on success, negative SWD_ERROR code on failure. 
  */
 int swd_log_level_inherit(swd_ctx_t *swdctx, int loglevel){
+ LOG_DEBUG("OpenOCD's swd_log_level_inherit(swdctx=@0x%08X, loglevel=%d)\n", (int)swdctx, loglevel);
  if (swdctx==NULL){
   LOG_WARNING("swd_log_level_inherit(): SWD Context not (yet) initialized...\n");
   return SWD_OK;
@@ -252,4 +263,42 @@ int swd_log_level_inherit(swd_ctx_t *swdctx, int loglevel){
  } else return SWD_OK;
 }
 
+/** We will use OpenOCD's logging mechanisms to show LibSWD messages. */
+int swd_log(swd_ctx_t *swdctx, swd_loglevel_t loglevel, char *msg, ...){
+ if (swdctx==NULL) return SWD_ERROR_NULLCONTEXT;
+ if (loglevel > SWD_LOGLEVEL_MAX) return SWD_ERROR_PARAM; 
+
+ if (loglevel > swdctx->config.loglevel) return SWD_OK;
+ int res;
+ va_list ap;
+ va_start(ap, msg);
+ res=vprintf(msg, ap);
+ va_end(ap);
+ return res;
+
+
+ LOG_DEBUG("swdctx=0x%08X, loglevel=0x%02X, msg=%s\n", (int)swdctx, (int)loglevel, msg);
+ switch(loglevel){
+  case SWD_LOGLEVEL_NORMAL:
+   LOG_USER(msg, ap);
+   break;
+  case SWD_LOGLEVEL_ERROR:
+   LOG_ERROR(msg, ap);
+   break;
+  case SWD_LOGLEVEL_WARNING:
+   LOG_WARNING(msg, ap);
+   break;
+  case SWD_LOGLEVEL_INFO:
+   printf(msg, ap);
+   break;
+  case SWD_LOGLEVEL_DEBUG:
+   LOG_DEBUG(msg, ap);
+   break;
+  default:
+   LOG_USER(msg, ap);
+ }
+ va_end(ap);
+
+ return SWD_OK;
+}
 
