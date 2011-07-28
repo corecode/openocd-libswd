@@ -318,7 +318,7 @@ struct jtag_interface {
 	/** current transport */
 	struct transport *transport;
 	/** Generic bitstream transfer from/into char bits array. */
-	int (*transfer)(void *device, int bits, char *mosidata, char *misodata);
+	int (*transfer)(void *device, int bits, char *mosidata, char *misodata, int nLSBfirst);
 	/** Generic signal set/get bitbang operation. */
 	int (*bitbang)(void *device, char *signal, int SETnGET, int *value);
 	/** Signals that are defined at runtime by driver initialization routine. */

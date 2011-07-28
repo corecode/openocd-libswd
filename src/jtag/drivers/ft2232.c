@@ -714,24 +714,26 @@ int ft2232_bitbang(void *device, char *signal_name, int GETnSET, int *value){
 }
 
 
-/** Transfer bits in/out stored in char array starting from LSB/[0],
- * if you want to make MSB-first shift put data in reverse order into array.
+/** Transfer bits in/out stored in char array starting from LSB first or MSB first,
+ * alternatively if you want to make MSB-first shift on LSB-first mode put data
+ * in reverse order into input/output array.
  * \param *device void pointer to pass driver details to the function.
  * \param bits is the number of bits (char array elements) to transfer.
  * \param *mosidata pointer to char array with data to be send.
  * \param *misodata pointer to char array with data to be received.
+ * \param nLSBfirst if zero shift data LSB-first, otherwise MSB-first.
  * \return number of bits sent on success, or ERROR_FAIL on failure. 
  */
-int ft2232_transfer(void *device, int bits, char *mosidata, char *misodata){
-	uint8_t  buf[3];
-	int retval, bit;
+int ft2232_transfer(void *device, int bits, char *mosidata, char *misodata, int nLSBfirst){
+	uint8_t buf[3];
+	int retval, bit, i;
 	uint32_t bytes_written, bytes_read;
 
 	//No optimization for now, simply send one bit from one char element.
 	for (bit=0;bit<bits;bit++){
-		buf[0]=0x3e;			// Clock Data Bits In and Out LSb first.
-		buf[1]=1;				// One bit per element.
-		buf[2]=mosidata[bit];	// Take data from supplied array.
+		buf[0]=(nLSBfirst)?0x33:0x3b;	// Clock Bits In and Out LSb or MSb first.
+		buf[1]=0;					// One bit per element.
+		buf[2]=mosidata[bit]?0xff:0;	// Take data from supplied array.
 		retval=ft2232_write(buf, 3, &bytes_written);
 		if (retval<0){
 			LOG_ERROR("ft2232_write() returns %d", retval);
@@ -740,6 +742,20 @@ int ft2232_transfer(void *device, int bits, char *mosidata, char *misodata){
 		retval=ft2232_read((uint8_t *)&misodata[bit], 1, &bytes_read);
 		if (retval<0){
 			LOG_ERROR("ft2232_read() returns %d", retval);
+			return ERROR_FAIL;
+		}
+		// FTDI MPSSE returns shift register value, our bit is MSb 
+		misodata[bit]=(misodata[bit]&(nLSBfirst?0x01:0x80))?1:0;
+	}
+
+	/* Check if MPSSE ERROR occured and print info if so. */
+	for (bit=0;bit<bits;bit++){
+		if (misodata[bit]==(char)0xfa) {
+			LOG_ERROR("FTDI MPSSE 0xFA (failure) response detected!");
+			LOG_ERROR("The input buffer was:");
+			for (i=bit;i<bits;i++) LOG_ERROR(" %x", misodata[i]);
+			LOG_ERROR("The output buffer was:");
+			for (i=bit;i<bits;i++) LOG_ERROR(" %x", mosidata[i]);
 			return ERROR_FAIL;
 		}
 	}
@@ -4493,7 +4509,6 @@ static void signalyzer_h_blink(void)
  * JTAG and SWD adapter from KRISTECH
  * http://www.kristech.eu
  *******************************************************************/
-/*
 static int ktlink_init_jtag(void)
 {
 	uint8_t  swd_en = 0x20; //0x20 SWD disable, 0x00 SWD enable (ADBUS5)
@@ -4549,8 +4564,7 @@ static int ktlink_init_jtag(void)
 static int ktlink_init_swd(void)
 {
 	/* High Byte (ACBUS) members. */
-	static uint8_t nSWCLKen=0x40, nTDIen=0x20, TRST=0x01, nTRSTen=0x04, SRST=0x02, nSRSTen=0x08, LED=0x80;
-	//RnW=0x10, LED=0x80;
+	static uint8_t nSWCLKen=0x40, nTDIen=0x20, TRST=0x01, nTRSTen=0x04, SRST=0x02, nSRSTen=0x08, LED=0x80, RnW=0x10;
 	/* Low Byte (ADBUS) members. */
 	static uint8_t SWCLK=0x01, TDI=0x02, TDO=0x04, nSWDIOsel=0x20;
 
@@ -4574,11 +4588,9 @@ static int ktlink_init_swd(void)
 	/* Set Data Bits High Byte (ACBUS)                                */
 	/* Enable SWD pins  : nTCKen=0, RnW=1, nSRSTen=0, nLED=0, SRST=1  */
 	/* Disable JTAG pins: nTDIen=1, nSWDIOen=1, nTRSTen=1             */ 
-	//high_output = 0 | RnW | SRST | nTDIen | nTRSTen;
-	high_output = 0 | nTDIen | nTRSTen;
+	high_output = 0 | RnW | SRST | nTDIen | nTRSTen;
 	/* Set ACBUS Port Direction (1=Output) */
-	//high_direction = 0 | RnW | nSWCLKen | nTDIen | nTRSTen | nSRSTen | SRST | LED;
-	high_direction = 0 | nSWCLKen | nTDIen | nTRSTen | LED;
+	high_direction = 0 | RnW | nSWCLKen | nTDIen | nTRSTen | nSRSTen | SRST | LED;
 
 	/* initialize high byte port (ACBUS) */
 	if (ft2232_set_data_bits_high_byte(high_output,high_direction) != ERROR_OK)
