@@ -57,7 +57,7 @@ extern struct command_context *global_cmd_ctx;
  */
 
 /** List of transports known to OpenOCD. */
-static struct transport *transport_list;
+static struct transport *transport_list = NULL;
 
 /**
  * NULL-terminated Vector of names of transports which the
