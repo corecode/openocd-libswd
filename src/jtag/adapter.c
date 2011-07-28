@@ -202,7 +202,7 @@ COMMAND_HANDLER(handle_interface_command)
  */
 COMMAND_HANDLER(handle_interface_signal_command)
 {
-	LOG_DEBUG("%s", __func__);
+	LOG_DEBUG("entering function...");
 
 	if (!jtag_interface){
 		command_print(CMD_CTX, "You must initialize interface first!");
