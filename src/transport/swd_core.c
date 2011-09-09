@@ -34,7 +34,7 @@
  *
  */
 
-/** \file swd.c SWD Transport Body File for OpenOCD.
+/** \file swd_core.c SWD Transport Core Body File for OpenOCD.
  * SWD Transport Layer creates bridge between target and the interface driver
  * functions. Target functions create high level operations on the device's
  * DAP (Debug Access Port), while interface driver passes electrical signals
