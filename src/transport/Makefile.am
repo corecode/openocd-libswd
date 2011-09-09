@@ -5,6 +5,7 @@ noinst_LTLIBRARIES = libtransport.la
 libtransport_la_SOURCES = \
 	transport.c \
 	swd_core.c \
+	swd_tcl.c \
 	swd_libswd_drv_openocd.c
 
 noinst_HEADERS = \

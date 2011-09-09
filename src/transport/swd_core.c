@@ -180,6 +180,12 @@ int oocd_swd_transport_select(struct command_context *ctx){
 		LOG_ERROR("Unable to set log level: %s", swd_error_string(retval));
 		return ERROR_FAIL;
 	} 
+
+	retval=swd_register_commands(ctx);
+	if (retval!=ERROR_OK) {
+		LOG_ERROR("Unable to register SWD commands!");
+		return retval;
+	}
      LOG_DEBUG("SWD Transport selection complete...");
 	return ERROR_OK;
 }

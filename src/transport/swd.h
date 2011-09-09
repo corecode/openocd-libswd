@@ -35,10 +35,17 @@
  */
 
 /** \file swd.h SWD Transport Header File for OpenOCD. */
+#ifdef HAVE_CONFIG_H 
+#include "config.h"
+#endif
 
 #include <libswd.h>
 #include <transport/transport.h>
+#include <target/arm.h>
 #include <target/arm_adi_v5.h>
+#include <helper/log.h>
+#include <interface/interface.h>
+#include <jtag/interface.h>
 
 int oocd_swd_queue_idcode_read(struct adiv5_dap *dap, uint8_t *ack, uint32_t *data);
 int oocd_swd_queue_dp_read(struct adiv5_dap *dap, unsigned reg, uint32_t *data);
@@ -52,4 +59,6 @@ int oocd_swd_transport_select(struct command_context *ctx);
 
 extern struct transport oocd_transport_swd;
 extern const struct dap_ops oocd_dap_ops_swd;
+
+int swd_register_commands(struct command_context *cmd_ctx);
 
