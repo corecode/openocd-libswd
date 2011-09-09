@@ -260,7 +260,7 @@ int swd_log_level_inherit(swd_ctx_t *swdctx, int loglevel){
  if (res<0) {
   LOG_ERROR("swd_log_level_set() failed (%s)\n", swd_error_string(res));
   return ERROR_FAIL;
- } else return SWD_OK;
+ } return new_swdlevel;
 }
 
 /** We will use OpenOCD's logging mechanisms to show LibSWD messages. */
