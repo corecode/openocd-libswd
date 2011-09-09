@@ -1,7 +1,7 @@
 /*
  * $Id$
  *
- * SWD Transport Body File for OpenOCD.
+ * SWD Transport Core Body File for OpenOCD.
  *
  * Copyright (C) 2011 Tomasz Boleslaw CEDRO
  * cederom@tlen.pl, http://www.tomek.cedro.info
@@ -59,7 +59,7 @@ extern struct jtag_interface *jtag_interface;
 
 int oocd_swd_queue_idcode_read(struct adiv5_dap *dap, uint8_t *ack, uint32_t *data){
 	int retval;
-	retval=swd_dp_read_idcode(dap->ctx, SWD_OPERATION_ENQUEUE, (int **)&data);
+	retval=swd_dp_read_idcode(jtag_interface->transport->ctx, SWD_OPERATION_ENQUEUE, (int **)&data);
 	if (retval<0) {
 		LOG_ERROR("swd_dp_read_idcode() error: %s ", swd_error_string(retval));
 		return ERROR_FAIL;
@@ -68,7 +68,7 @@ int oocd_swd_queue_idcode_read(struct adiv5_dap *dap, uint8_t *ack, uint32_t *da
 
 int oocd_swd_queue_dp_read(struct adiv5_dap *dap, unsigned reg, uint32_t *data){
 	int retval;
-	retval=swd_dp_read((swd_ctx_t *)dap->ctx, SWD_OPERATION_ENQUEUE, reg, (int **)&data);
+	retval=swd_dp_read((swd_ctx_t *)jtag_interface->transport->ctx, SWD_OPERATION_ENQUEUE, reg, (int **)&data);
 	if (retval<0){
 		LOG_ERROR("swd_dp_read() error: %s ", swd_error_string(retval));
 		return ERROR_FAIL;
@@ -78,7 +78,7 @@ int oocd_swd_queue_dp_read(struct adiv5_dap *dap, unsigned reg, uint32_t *data){
 
 int oocd_swd_queue_dp_write(struct adiv5_dap *dap, unsigned reg, uint32_t data){
 	int retval;
-	retval=swd_dp_write((swd_ctx_t *)dap->ctx, SWD_OPERATION_ENQUEUE, (char) reg, (int *) &data);
+	retval=swd_dp_write((swd_ctx_t *)jtag_interface->transport->ctx, SWD_OPERATION_ENQUEUE, (char) reg, (int *) &data);
 	if (retval<0){
 		LOG_ERROR("swd_dp_write() error: %s ", swd_error_string(retval));
 		return ERROR_FAIL;
@@ -88,7 +88,7 @@ int oocd_swd_queue_dp_write(struct adiv5_dap *dap, unsigned reg, uint32_t data){
 
 int oocd_swd_queue_ap_read(struct adiv5_dap *dap, unsigned reg, uint32_t *data){
 	int retval;
-	retval=swd_ap_read((swd_ctx_t *)dap->ctx, SWD_OPERATION_ENQUEUE, (char) reg, (int **) &data);
+	retval=swd_ap_read((swd_ctx_t *)jtag_interface->transport->ctx, SWD_OPERATION_ENQUEUE, (char) reg, (int **) &data);
 	if (retval<0){
 		LOG_ERROR("swd_ap_read() error: %s ", swd_error_string(retval));
 		return ERROR_FAIL;
@@ -98,7 +98,7 @@ int oocd_swd_queue_ap_read(struct adiv5_dap *dap, unsigned reg, uint32_t *data){
 
 int oocd_swd_queue_ap_write(struct adiv5_dap *dap, unsigned reg, uint32_t data){
 	int retval;
-	retval=swd_ap_write((swd_ctx_t *)dap->ctx, SWD_OPERATION_ENQUEUE, (char) reg, (int *) &data);
+	retval=swd_ap_write((swd_ctx_t *)jtag_interface->transport->ctx, SWD_OPERATION_ENQUEUE, (char) reg, (int *) &data);
 	if (retval<0){
 		LOG_ERROR("swd_ap_write() error: %s ", swd_error_string(retval));
 		return ERROR_FAIL;
@@ -109,13 +109,13 @@ int oocd_swd_queue_ap_write(struct adiv5_dap *dap, unsigned reg, uint32_t data){
 int oocd_swd_queue_ap_abort(struct adiv5_dap *dap, uint8_t *ack){
 	//int retval;
 	//char reg=SWD_DP_ABORT_ADDR;
-     LOG_ERROR("not yet implemented");
+     LOG_ERROR("oocd_swd_queue_ap_abort() not yet implemented");
 	return ERROR_FAIL;
 }
 
 int oocd_swd_run(struct adiv5_dap *dap){
 	int retval;
-	retval=swd_cmdq_flush((swd_ctx_t *)dap->ctx, SWD_OPERATION_EXECUTE);
+	retval=swd_cmdq_flush((swd_ctx_t *)jtag_interface->transport->ctx, SWD_OPERATION_EXECUTE);
 	if (retval<0){
 		LOG_ERROR("swd_cmdq_flush() error: %s", swd_error_string(retval));
 		return retval;
@@ -223,17 +223,6 @@ bool transport_is_swd(void)
 	return get_current_transport() == &oocd_transport_swd;
 }
 
-/** Returns true if the current debug session
- *  * is using SWD as its transport.
- *   */
-//bool transport_is_swd(void)
-//{
-//             return get_current_transport() == &oocd_transport_swd;
-//}
-
-
-
-
 
 
 
@@ -285,26 +274,8 @@ static const uint8_t jtag2swd_bitseq[] = {
  */
 int dap_to_swd(struct target *target)
 {
-	struct arm *arm = target_to_arm(target);
-	int retval;
-
-	LOG_DEBUG("Enter SWD mode");
-
-	/* REVISIT it's ugly to need to make calls to a "jtag"
-	 * subsystem if the link may not be in JTAG mode...
-	 */
-
-	retval =  jtag_add_tms_seq(8 * sizeof(jtag2swd_bitseq),
-			jtag2swd_bitseq, TAP_INVALID);
-	if (retval == ERROR_OK)
-		retval = jtag_execute_queue();
-
-	/* set up the DAP's ops vector for SWD mode. */
-	arm->dap->ops = &oocd_dap_ops_swd;
-
-	return retval;
+	LOG_INFO("dap_to_swd()");
+	return ERROR_OK;
 }
-
-
 
 /** @} */
