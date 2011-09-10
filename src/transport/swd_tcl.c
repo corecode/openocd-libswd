@@ -43,6 +43,7 @@
 //we need to use this until we get rid of global pointers
 extern struct jtag_interface *jtag_interface;
 
+
 COMMAND_HANDLER(handle_swd_loglevel)
 {
 	int loglevel;
@@ -87,7 +88,7 @@ static const struct command_registration swd_subcommand_handlers[] = {
 		 *
 		 * REVISIT can we verify "just one SWD DAP" here/early?
 		 */
-		.name = "newdap",
+		.name = "newtap",
 		.jim_handler = jim_jtag_newtap,
 		.mode = COMMAND_CONFIG,
 		.help = "declare a new SWD DAP"
