@@ -59,7 +59,7 @@ extern struct jtag_interface *jtag_interface;
 
 int oocd_swd_queue_idcode_read(struct adiv5_dap *dap, uint8_t *ack, uint32_t *data){
 	int retval;
-	retval=swd_dp_read_idcode(jtag_interface->transport->ctx, SWD_OPERATION_ENQUEUE, (int **)&data);
+	retval=swd_dp_read_idcode(dap->ctx, SWD_OPERATION_ENQUEUE, (int **)&data);
 	if (retval<0) {
 		LOG_ERROR("swd_dp_read_idcode() error: %s ", swd_error_string(retval));
 		return ERROR_FAIL;
@@ -68,7 +68,7 @@ int oocd_swd_queue_idcode_read(struct adiv5_dap *dap, uint8_t *ack, uint32_t *da
 
 int oocd_swd_queue_dp_read(struct adiv5_dap *dap, unsigned reg, uint32_t *data){
 	int retval;
-	retval=swd_dp_read((swd_ctx_t *)jtag_interface->transport->ctx, SWD_OPERATION_ENQUEUE, reg, (int **)&data);
+	retval=swd_dp_read((swd_ctx_t *)dap->ctx, SWD_OPERATION_ENQUEUE, reg, (int **)&data);
 	if (retval<0){
 		LOG_ERROR("swd_dp_read() error: %s ", swd_error_string(retval));
 		return ERROR_FAIL;
@@ -78,7 +78,7 @@ int oocd_swd_queue_dp_read(struct adiv5_dap *dap, unsigned reg, uint32_t *data){
 
 int oocd_swd_queue_dp_write(struct adiv5_dap *dap, unsigned reg, uint32_t data){
 	int retval;
-	retval=swd_dp_write((swd_ctx_t *)jtag_interface->transport->ctx, SWD_OPERATION_ENQUEUE, (char) reg, (int *) &data);
+	retval=swd_dp_write((swd_ctx_t *)dap->ctx, SWD_OPERATION_ENQUEUE, (char) reg, (int *) &data);
 	if (retval<0){
 		LOG_ERROR("swd_dp_write() error: %s ", swd_error_string(retval));
 		return ERROR_FAIL;
@@ -88,7 +88,7 @@ int oocd_swd_queue_dp_write(struct adiv5_dap *dap, unsigned reg, uint32_t data){
 
 int oocd_swd_queue_ap_read(struct adiv5_dap *dap, unsigned reg, uint32_t *data){
 	int retval;
-	retval=swd_ap_read((swd_ctx_t *)jtag_interface->transport->ctx, SWD_OPERATION_ENQUEUE, (char) reg, (int **) &data);
+	retval=swd_ap_read((swd_ctx_t *)dap->ctx, SWD_OPERATION_ENQUEUE, (char) reg, (int **) &data);
 	if (retval<0){
 		LOG_ERROR("swd_ap_read() error: %s ", swd_error_string(retval));
 		return ERROR_FAIL;
@@ -98,7 +98,7 @@ int oocd_swd_queue_ap_read(struct adiv5_dap *dap, unsigned reg, uint32_t *data){
 
 int oocd_swd_queue_ap_write(struct adiv5_dap *dap, unsigned reg, uint32_t data){
 	int retval;
-	retval=swd_ap_write((swd_ctx_t *)jtag_interface->transport->ctx, SWD_OPERATION_ENQUEUE, (char) reg, (int *) &data);
+	retval=swd_ap_write((swd_ctx_t *)dap->ctx, SWD_OPERATION_ENQUEUE, (char) reg, (int *) &data);
 	if (retval<0){
 		LOG_ERROR("swd_ap_write() error: %s ", swd_error_string(retval));
 		return ERROR_FAIL;
@@ -115,7 +115,7 @@ int oocd_swd_queue_ap_abort(struct adiv5_dap *dap, uint8_t *ack){
 
 int oocd_swd_run(struct adiv5_dap *dap){
 	int retval;
-	retval=swd_cmdq_flush((swd_ctx_t *)jtag_interface->transport->ctx, SWD_OPERATION_EXECUTE);
+	retval=swd_cmdq_flush((swd_ctx_t *)dap->ctx, SWD_OPERATION_EXECUTE);
 	if (retval<0){
 		LOG_ERROR("swd_cmdq_flush() error: %s", swd_error_string(retval));
 		return retval;
@@ -129,16 +129,37 @@ int oocd_swd_transport_init(struct command_context *ctx){
 	LOG_DEBUG("entering function...");
 	int retval, *idcode;
 
-	//struct target *target = get_current_target(ctx);
-	//struct arm *arm = target_to_arm(target);
-	//struct adiv5_dap *dap = arm->dap;
+	struct target *target = get_current_target(ctx);
+	struct arm *arm = target_to_arm(target);
+	struct adiv5_dap *dap = arm->dap;
+
+	dap->ops=&oocd_dap_ops_swd;
+
+     // Create SWD_CTX if nesessary
+	if (!dap->ctx){
+		/** Transport was not yet initialized. */
+		dap->ctx=swd_init();
+		if (dap->ctx==NULL) {
+			LOG_ERROR("Cannot initialize SWD context!");
+			return ERROR_FAIL;
+		}
+		LOG_INFO("New SWD context initialized at 0x%p", (void *)dap->ctx);
+	} else LOG_INFO("Working on existing transport context at 0x%p...", (void *)dap->ctx);
+
+	retval=swd_log_level_inherit((swd_ctx_t *)dap->ctx, debug_level);
+	if (retval<0){
+		LOG_ERROR("Unable to set log level: %s", swd_error_string(retval));
+		return ERROR_FAIL;
+	} 
+
+
 
 	/**
 	 * Initialize the driver to work with selected transport.
 	 * Because we can work on existing context there is no need to destroy it,
 	 * as it can be used on next try.
 	 */
-	retval=swd_dap_detect((swd_ctx_t *)jtag_interface->transport->ctx, SWD_OPERATION_EXECUTE, &idcode);
+	retval=swd_dap_detect((swd_ctx_t *)dap->ctx, SWD_OPERATION_EXECUTE, &idcode);
 	if (retval<0) {
           LOG_ERROR("swd_dap_detect() error %d (%s)", retval, swd_error_string(retval));
           return retval;
@@ -161,31 +182,12 @@ int oocd_swd_transport_select(struct command_context *ctx){
 	int retval;
 
      jtag_interface->transport=(struct transport *)&oocd_transport_swd;
-	//struct target *target = get_current_target(ctx);
-	// retval = register_commands(ctx, NULL, swd_handlers);
 
-     // Create SWD_CTX if nesessary
-	if (!jtag_interface->transport->ctx){
-		/** Transport was not yet initialized. */
-		jtag_interface->transport->ctx=swd_init();
-		if (jtag_interface->transport->ctx==NULL) {
-			LOG_ERROR("Cannot initialize SWD context!");
-			return ERROR_FAIL;
-		}
-		LOG_INFO("New SWD context initialized at 0x%08X", (int)jtag_interface->transport->ctx);
-	} else LOG_INFO("Working on existing transport context at 0x%0X...", (int)&jtag_interface->transport->ctx);
-
-	retval=swd_log_level_inherit(jtag_interface->transport->ctx, debug_level);
-	if (retval<0){
-		LOG_ERROR("Unable to set log level: %s", swd_error_string(retval));
-		return ERROR_FAIL;
-	} 
-
-	retval=swd_register_commands(ctx);
-	if (retval!=ERROR_OK) {
+	if (swd_register_commands(ctx)!=ERROR_OK){
 		LOG_ERROR("Unable to register SWD commands!");
 		return retval;
 	}
+
      LOG_DEBUG("SWD Transport selection complete...");
 	return ERROR_OK;
 }
