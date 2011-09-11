@@ -151,7 +151,7 @@ int dap_setup_accessport(struct adiv5_dap *dap, uint32_t csw, uint32_t tar)
 	csw = csw | CSW_DBGSWENABLE | CSW_MASTER_DEBUG | CSW_HPROT;
 	if (csw != dap->ap_csw_value)
 	{
-		/* LOG_DEBUG("DAP: Set CSW %x",csw); */
+		LOG_DEBUG("DAP: Set CSW %x",csw);
 		retval = dap_queue_ap_write(dap, AP_REG_CSW, csw);
 		if (retval != ERROR_OK)
 			return retval;
@@ -159,7 +159,7 @@ int dap_setup_accessport(struct adiv5_dap *dap, uint32_t csw, uint32_t tar)
 	}
 	if (tar != dap->ap_tar_value)
 	{
-		/* LOG_DEBUG("DAP: Set TAR %x",tar); */
+		LOG_DEBUG("DAP: Set TAR %x",tar);
 		retval = dap_queue_ap_write(dap, AP_REG_TAR, tar);
 		if (retval != ERROR_OK)
 			return retval;
@@ -585,7 +585,7 @@ extern int adi_jtag_dp_scan(struct adiv5_dap *dap,
  * @param address Memory address from which to read words; all the
  *	words must be readable by the currently selected MEM-AP.
  */
-int mem_ap_read_buf_u32(struct adiv5_dap *dap, uint8_t *buffer,
+int mem_ap_read_buf_u32_old(struct adiv5_dap *dap, uint8_t *buffer,
 		int count, uint32_t address)
 {
 	int wcount, blocksize, readcount, errorcount = 0, retval = ERROR_OK;
@@ -687,6 +687,77 @@ int mem_ap_read_buf_u32(struct adiv5_dap *dap, uint8_t *buffer,
 
 	return retval;
 }
+
+
+int mem_ap_read_buf_u32(struct adiv5_dap *dap, uint8_t *buffer,
+		int count, uint32_t address)
+{
+//	int wcount, blocksize, readcount, errorcount = 0, retval = ERROR_OK;
+//	uint32_t invalue, adr = address;
+//	uint8_t* pBuffer = buffer;
+
+	int i, retval;
+	uint32_t invalue;
+	//count >>= 2;
+//	wcount = count;
+
+	while (count > 0)
+	{
+		retval = dap_setup_accessport(dap, CSW_32BIT | CSW_ADDRINC_SINGLE, address);
+		if (retval != ERROR_OK)
+			return retval;
+		retval = dap_queue_ap_read(dap, AP_REG_DRW, &invalue);
+		if (retval != ERROR_OK)
+			break;
+
+		retval = dap_run(dap);
+		if (retval != ERROR_OK)
+			break;
+
+		if (address & 0x3u)
+		{
+			for (i = 0; i < 4; i++)
+			{
+				*((uint8_t*)buffer) = (invalue >> 8 * (address & 0x3));
+				buffer++;
+				address++;
+			}
+		}
+		else
+		{
+			uint32_t svalue = (invalue >> 8 * (address & 0x3));
+			memcpy(buffer, &svalue, sizeof(uint32_t));
+			address += 4;
+			buffer += 4;
+		}
+		count -= 4;
+	}
+
+	/* if we have an unaligned access - reorder data 
+	if (adr & 0x3u)
+	{
+		for (readcount = 0; readcount < count; readcount++)
+		{
+			int i;
+			uint32_t data;
+			memcpy(&data, pBuffer, sizeof(uint32_t));
+
+			for (i = 0; i < 4; i++)
+			{
+				*((uint8_t*)pBuffer) =
+						(data >> 8 * (adr & 0x3));
+				pBuffer++;
+				adr++;
+			}
+		}
+	}
+	*/
+
+	return retval;
+}
+
+
+
 
 static int mem_ap_read_buf_packed_u16(struct adiv5_dap *dap,
 		uint8_t *buffer, int count, uint32_t address)
@@ -997,22 +1068,14 @@ int ahbap_debugport_init(struct adiv5_dap *dap)
 
 	LOG_DEBUG(" ");
 
-	/* JTAG-DP or SWJ-DP, in JTAG mode
-	 * ... for SWD mode this is patched as part
-	 * of link switchover
-	 *
-	 * if (!dap->ops)
-	 *	dap->ops = &jtag_dp_ops;
-      */
-
-     /** Here we connect transport-specific function set to work with DAP.
-      * Transport initialization is also part of interface initialization.
+     /** Here we select transport-specific function set to work with the DAP.
       * Target must select which transport to use (if supports many of them).
-      * If SWD transport is not selected JTAG is set here as default.
+      * This function set can also be setup by transport selection routine.
+      * If SWD (ot other) transport is not selected JTAG is set as default.
       */
      if ((strncmp(jtag_interface->transport->name, "swd", 3)==0)) {
              LOG_INFO("Selecting SWD transport command set.");
-             dap->ops = (struct dap_ops *)&oocd_dap_ops_swd;
+             dap->ops = &oocd_dap_ops_swd;
      } else {
              LOG_INFO("Selecting JTAG transport command set.");
              dap->ops = &jtag_dp_ops;
