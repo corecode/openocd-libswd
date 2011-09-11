@@ -47,8 +47,6 @@
 #endif
 
 #include <transport/swd.h>
-#include <jtag/interface.h> //we want this here to use extern global *interface
-#include <unistd.h>
 
 ///Unfortunalety OpenOCD use globals to pass information so we need to use it too.
 extern struct jtag_interface *jtag_interface;
@@ -144,18 +142,15 @@ int oocd_swd_transport_init(struct command_context *ctx){
 			return ERROR_FAIL;
 		}
 		LOG_INFO("New SWD context initialized at 0x%p", (void *)dap->ctx);
+		/* Now inherit the log level from OpenOCD settings. */
+		if (swd_log_level_inherit((swd_ctx_t *)dap->ctx, debug_level)<0){
+			LOG_ERROR("Unable to set log level: %s", swd_error_string(retval));
+			return ERROR_FAIL;
+		} 
 	} else LOG_INFO("Working on existing transport context at 0x%p...", (void *)dap->ctx);
 
-	retval=swd_log_level_inherit((swd_ctx_t *)dap->ctx, debug_level);
-	if (retval<0){
-		LOG_ERROR("Unable to set log level: %s", swd_error_string(retval));
-		return ERROR_FAIL;
-	} 
-
-
-
 	/**
-	 * Initialize the driver to work with selected transport.
+	 * Initialize driver and detect target working with selected transport.
 	 * Because we can work on existing context there is no need to destroy it,
 	 * as it can be used on next try.
 	 */

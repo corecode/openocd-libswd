@@ -263,7 +263,11 @@ int swd_log_level_inherit(swd_ctx_t *swdctx, int loglevel){
  } return new_swdlevel;
 }
 
-/** We will use OpenOCD's logging mechanisms to show LibSWD messages. */
+/** We will use OpenOCD's logging mechanisms to show LibSWD messages.
+  * SWD can have different loglevel set than the OpenOCD itself, so we need to
+  * log all messages at openocd level that will not block swd messages.
+  * It is also possible to 'inherit' loglevel to swd from openocd.
+  */
 int swd_log(swd_ctx_t *swdctx, swd_loglevel_t loglevel, char *msg, ...){
  if (swdctx==NULL) return SWD_ERROR_NULLCONTEXT;
  if (loglevel > SWD_LOGLEVEL_MAX) return SWD_ERROR_PARAM; 
@@ -272,33 +276,9 @@ int swd_log(swd_ctx_t *swdctx, swd_loglevel_t loglevel, char *msg, ...){
  int res;
  va_list ap;
  va_start(ap, msg);
+ // Calling OpenOCD log functions here will cause program crash (va recurrent).
  res=vprintf(msg, ap);
  va_end(ap);
- return res;
-
-
- LOG_DEBUG("swdctx=0x%08X, loglevel=0x%02X, msg=%s\n", (int)swdctx, (int)loglevel, msg);
- switch(loglevel){
-  case SWD_LOGLEVEL_NORMAL:
-   LOG_USER(msg, ap);
-   break;
-  case SWD_LOGLEVEL_ERROR:
-   LOG_ERROR(msg, ap);
-   break;
-  case SWD_LOGLEVEL_WARNING:
-   LOG_WARNING(msg, ap);
-   break;
-  case SWD_LOGLEVEL_INFO:
-   printf(msg, ap);
-   break;
-  case SWD_LOGLEVEL_DEBUG:
-   LOG_DEBUG(msg, ap);
-   break;
-  default:
-   LOG_USER(msg, ap);
- }
- va_end(ap);
-
  return SWD_OK;
 }
 

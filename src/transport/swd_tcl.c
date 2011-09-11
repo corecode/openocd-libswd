@@ -40,18 +40,16 @@
 
 #include <transport/swd.h>
 
-//we need to use this until we get rid of global pointers
-extern struct jtag_interface *jtag_interface;
-
-
 COMMAND_HANDLER(handle_swd_loglevel)
 {
 	int loglevel;
-	swd_ctx_t *swdctx=(swd_ctx_t *)jtag_interface->transport->ctx;
+	struct target *target = get_current_target(CMD_CTX);
+	struct arm *arm = target_to_arm(target);
+	swd_ctx_t *swdctx = (swd_ctx_t *)arm->dap->ctx;
 
 	switch (CMD_ARGC) {
 	case 0:
-		LOG_INFO("Current SWD LogLevel[%d..%d] is: %d (%s)", SWD_LOGLEVEL_MIN, SWD_LOGLEVEL_MAX, swdctx->config.loglevel, swd_log_level_string(swdctx->config.loglevel));
+		LOG_USER("Current SWD LogLevel[%d..%d] is: %d (%s)\n", SWD_LOGLEVEL_MIN, SWD_LOGLEVEL_MAX, swdctx->config.loglevel, swd_log_level_string(swdctx->config.loglevel));
 		break;
 	case 1:
 		// We want to allow inherit current OpenOCD's debuglevel.
@@ -60,7 +58,7 @@ COMMAND_HANDLER(handle_swd_loglevel)
 				LOG_ERROR("LogLevel inherit failed!");
 				return ERROR_FAIL;
 			} else {
-				LOG_INFO("Using OpenOCD settings, SWD LogLevel[%d..%d] set to: %d (%s)", SWD_LOGLEVEL_MIN, SWD_LOGLEVEL_MAX, loglevel, swd_log_level_string(loglevel));
+				LOG_USER("Using OpenOCD settings, SWD LogLevel[%d..%d] set to: %d (%s)\n", SWD_LOGLEVEL_MIN, SWD_LOGLEVEL_MAX, loglevel, swd_log_level_string(loglevel));
 				return ERROR_OK; 
 			}
 		}
@@ -69,7 +67,7 @@ COMMAND_HANDLER(handle_swd_loglevel)
 		if (loglevel<SWD_LOGLEVEL_MIN || loglevel>SWD_LOGLEVEL_MAX) {
 			LOG_ERROR("Bad SWD LogLevel value!");
 			return ERROR_FAIL;
-		} else LOG_INFO("Setting SWD LogLevel[%d..%d] to: %d (%s)", SWD_LOGLEVEL_MIN, SWD_LOGLEVEL_MAX, loglevel, swd_log_level_string(loglevel));
+		} else LOG_USER("Setting SWD LogLevel[%d..%d] to: %d (%s)\n", SWD_LOGLEVEL_MIN, SWD_LOGLEVEL_MAX, loglevel, swd_log_level_string(loglevel));
 		if(swd_log_level_set(swdctx, loglevel)<0){
 			return ERROR_FAIL;
 		} else return ERROR_OK;
