@@ -277,7 +277,7 @@ int swd_log(swd_ctx_t *swdctx, swd_loglevel_t loglevel, char *msg, ...){
  va_list ap;
  va_start(ap, msg);
  // Calling OpenOCD log functions here will cause program crash (va recurrent).
- res=vprintf(msg, ap);
+ res=vprintf(msg, ap); printf("\n");
  va_end(ap);
  return SWD_OK;
 }
