@@ -56,9 +56,9 @@ extern struct jtag_interface *jtag_interface;
  * \bits tells how many bits to send (at most 8).
  * \bits nLSBfirst tells the shift direction: 0 = LSB first, other MSB first.
  * \return data count transferred, or negative SWD_ERROR code on failure.
- */
+ar)*/
 int swd_drv_mosi_8(swd_ctx_t *swdctx, swd_cmd_t *cmd, char *data, int bits, int nLSBfirst){
- LOG_DEBUG("OpenOCD's swd_drv_mosi_8(swdctx=@0x%08X, cmd=@0x%08X, data=0x%08X, bits=%d, nLSBfirst=0x%02X)", (int)swdctx, (int)cmd, *data, bits, nLSBfirst);
+ LOG_DEBUG("OpenOCD's swd_drv_mosi_8(swdctx=@%p, cmd=@%p, data=0x%02X, bits=%d, nLSBfirst=0x%02X)", (void*)swdctx, (void*)cmd, *data, bits, nLSBfirst);
  if (data==NULL) return SWD_ERROR_NULLPOINTER;
  if (bits<0 && bits>8) return SWD_ERROR_PARAM;
  if (nLSBfirst!=0 && nLSBfirst!=1) return SWD_ERROR_PARAM;
@@ -87,7 +87,7 @@ int swd_drv_mosi_8(swd_ctx_t *swdctx, swd_cmd_t *cmd, char *data, int bits, int 
  * \return data count transferred, or negative SWD_ERROR code on failure.
  */
 int swd_drv_mosi_32(swd_ctx_t *swdctx, swd_cmd_t *cmd, int *data, int bits, int nLSBfirst){
- LOG_DEBUG("OpenOCD's swd_drv_mosi_32(swdctx=@0x%08X, cmd=@0x%02X, data=0x%08X, bits=%d, nLSBfirst=0x%02X)", (int)swdctx, (int)cmd, *data, bits, nLSBfirst);
+ LOG_DEBUG("OpenOCD's swd_drv_mosi_32(swdctx=@%p, cmd=@%p, data=0x%08X, bits=%d, nLSBfirst=0x%02X)", (void*)swdctx, (void*)cmd, *data, bits, nLSBfirst);
  if (data==NULL) return SWD_ERROR_NULLPOINTER;
  if (bits<0 && bits>8) return SWD_ERROR_PARAM;
  if (nLSBfirst!=0 && nLSBfirst!=1) return SWD_ERROR_PARAM;
@@ -128,7 +128,7 @@ int swd_drv_miso_8(swd_ctx_t *swdctx, swd_cmd_t *cmd, char *data, int bits, int 
  /* Now we need to reconstruct the data byte from shifted in LSBfirst byte array. */
  *data=0;
  for (i=0;i<bits;i++) *data|=(misodata[(nLSBfirst==SWD_DIR_LSBFIRST)?(bits-1-i):(i)]?(1<<i):0);
- LOG_DEBUG("OpenOCD's swd_drv_miso_8(swdctx=@0x%08X, cmd=@0x%08X, data=@0x%08X, bits=%d, nLSBfirst=0x%02X) reads: 0x%08X", (int)swdctx, (int)cmd, (int)data, bits, nLSBfirst, *data);
+ LOG_DEBUG("OpenOCD's swd_drv_miso_8(swdctx=@%p, cmd=@%p, data=@%p, bits=%d, nLSBfirst=0x%02X) reads: 0x%02X", (void*)swdctx, (void*)cmd, (void*)data, bits, nLSBfirst, *data);
  return i;
 }
 
@@ -156,7 +156,7 @@ int swd_drv_miso_32(swd_ctx_t *swdctx, swd_cmd_t *cmd, int *data, int bits, int 
  /* Now we need to reconstruct the data byte from shifted in LSBfirst byte array. */
  *data=0;
  for (i=0;i<bits;i++) *data|=(misodata[(nLSBfirst==SWD_DIR_LSBFIRST)?(bits-1-i):(i)]?(1<<i):0);
- LOG_DEBUG("OpenOCD's swd_drv_miso_32(swdctx=@0x%08X, cmd=@0x%02X, data=@0x08%X, bits=%d, nLSBfirst=0x%02X) reads: 0x%08X", (int)swdctx, (int)cmd, (int)data, bits, nLSBfirst, *data);
+ LOG_DEBUG("OpenOCD's swd_drv_miso_32(swdctx=@%p, cmd=@%p, data=@%p, bits=%d, nLSBfirst=0x%02X) reads: 0x%08X", (void*)swdctx, (void*)cmd, (void*)data, bits, nLSBfirst, *data);
  LOG_DEBUG("OpenOCD's swd_drv_miso_32() reads: 0x%08X\n", *data);
  return i;
 }       
@@ -171,7 +171,7 @@ int swd_drv_miso_32(swd_ctx_t *swdctx, swd_cmd_t *cmd, int *data, int bits, int 
  * \return number of bits transmitted or negative SWD_ERROR code on failure. 
  */
 int swd_drv_mosi_trn(swd_ctx_t *swdctx, int bits){
- LOG_DEBUG("OpenOCD's swd_drv_mosi_trn(swdctx=@0x%08X, bits=%d)\n", (int)swdctx, bits);
+ LOG_DEBUG("OpenOCD's swd_drv_mosi_trn(swdctx=@%p, bits=%d)\n", (void*)swdctx, bits);
  if (bits<SWD_TURNROUND_MIN_VAL && bits>SWD_TURNROUND_MAX_VAL)
   return SWD_ERROR_TURNAROUND; 
 
@@ -198,7 +198,7 @@ int swd_drv_mosi_trn(swd_ctx_t *swdctx, int bits){
  * \return number of bits transmitted or negative SWD_ERROR code on failure. 
  */
 int swd_drv_miso_trn(swd_ctx_t *swdctx, int bits){
- LOG_DEBUG("OpenOCD's swd_drv_miso_trn(swdctx=@0x%08X, bits=%d)\n", (int)swdctx, bits);
+ LOG_DEBUG("OpenOCD's swd_drv_miso_trn(swdctx=@%p, bits=%d)\n", (void*)swdctx, bits);
  if (bits<SWD_TURNROUND_MIN_VAL && bits>SWD_TURNROUND_MAX_VAL)
   return SWD_ERROR_TURNAROUND; 
 
@@ -225,7 +225,7 @@ int swd_drv_miso_trn(swd_ctx_t *swdctx, int bits){
  * \return SWD_OK on success, negative SWD_ERROR code on failure. 
  */
 int swd_log_level_inherit(swd_ctx_t *swdctx, int loglevel){
- LOG_DEBUG("OpenOCD's swd_log_level_inherit(swdctx=@0x%08X, loglevel=%d)\n", (int)swdctx, loglevel);
+ LOG_DEBUG("OpenOCD's swd_log_level_inherit(swdctx=@%p, loglevel=%d)\n", (void*)swdctx, loglevel);
  if (swdctx==NULL){
   LOG_WARNING("swd_log_level_inherit(): SWD Context not (yet) initialized...\n");
   return SWD_OK;
