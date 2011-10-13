@@ -46,7 +46,7 @@
 #include "config.h"
 #endif
 
-#include <transport/swd.h>
+#include <transport/transport.h>
 
 ///Unfortunalety OpenOCD use globals to pass information so we need to use it too.
 extern struct jtag_interface *jtag_interface;

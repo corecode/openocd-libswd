@@ -276,6 +276,7 @@ struct command_context *setup_command_handler(Jim_Interp *interp)
 		&transport_register_commands,
 		&interface_register_commands,
 		&bitbang_register_commands,
+		&swd_register_commands,
 		&target_register_commands,
 		&flash_register_commands,
 		&nand_register_commands,

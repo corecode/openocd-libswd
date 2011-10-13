@@ -77,7 +77,6 @@
 #include <helper/time_support.h>
 #include <jtag/interface.h>
 #include <transport/transport.h>
-#include <transport/swd.h>
 
 //We need to have access to information on other layers such as transport etc
 //these are kept in global interface structure for now. Change ASAP.

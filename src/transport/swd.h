@@ -35,12 +35,16 @@
  */
 
 /** \file swd.h SWD Transport Header File for OpenOCD. */
+
+#ifndef OOCD_SWD_H
+#define OOCD_SWD_H
+
+
 #ifdef HAVE_CONFIG_H 
 #include "config.h"
 #endif
 
 #include <libswd.h>
-#include <transport/transport.h>
 #include <target/arm.h>
 #include <target/arm_adi_v5.h>
 #include <helper/log.h>
@@ -62,3 +66,4 @@ extern const struct dap_ops oocd_dap_ops_swd;
 
 int swd_register_commands(struct command_context *cmd_ctx);
 
+#endif
