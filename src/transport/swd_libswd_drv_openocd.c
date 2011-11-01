@@ -36,13 +36,7 @@
 
 /** \file libswd_drv_openocd.c Driver Bridge between LibSWD and OpenOCD. */
 
-#include <libswd.h>
-#include <sys/types.h>
-#include <helper/system.h>
-#include <helper/log.h>
-#include <jtag/interface.h>
-#include <helper/log.h>
-#include <helper/command.h>
+#include <transport/swd.h>
 
 /** OpenOCD as for now use global pointer to driver structure. */
 extern struct jtag_interface *jtag_interface;
