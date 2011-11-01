@@ -43,6 +43,12 @@ autoheader
 automake --gnu --add-missing --copy
 )
 
+# Bootstrap the submodules/libswd when working with git master not release
+if [ ! -f submodules/libswd/configure ]; then
+ echo "Info: submodules/libswd needs to be bootstrapped too..."
+ cd submodules/libswd; sh autogen.sh
+fi
+
 # AM_MAINTAINER_MODE requires --enable-maintainer-mode from everyone using
 # current source snapshots (working from GIT, or some source snapshot, etc)
 # otherwise the documentation will fail to build due to missing version.texi.
