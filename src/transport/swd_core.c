@@ -42,10 +42,6 @@
  * and external open-source SWD framework.
  */
 
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
-
 #include <transport/transport.h>
 
 ///Unfortunalety OpenOCD use globals to pass information so we need to use it too.
@@ -143,7 +139,8 @@ int oocd_swd_transport_init(struct command_context *ctx){
 		}
 		LOG_INFO("New SWD context initialized at 0x%p", (void *)dap->ctx);
 		/* Now inherit the log level from OpenOCD settings. */
-		if (swd_log_level_inherit((swd_ctx_t *)dap->ctx, debug_level)<0){
+		retval=swd_log_level_inherit((swd_ctx_t *)dap->ctx, debug_level);
+		if (retval<0){
 			LOG_ERROR("Unable to set log level: %s", swd_error_string(retval));
 			return ERROR_FAIL;
 		} 
@@ -178,7 +175,8 @@ int oocd_swd_transport_select(struct command_context *ctx){
 
      jtag_interface->transport=(struct transport *)&oocd_transport_swd;
 
-	if (swd_register_commands(ctx)!=ERROR_OK){
+	retval=swd_register_commands(ctx);
+	if (retval!=ERROR_OK){
 		LOG_ERROR("Unable to register SWD commands!");
 		return retval;
 	}

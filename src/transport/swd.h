@@ -36,13 +36,12 @@
 
 /** \file swd.h SWD Transport Header File for OpenOCD. */
 
-#ifndef OOCD_SWD_H
-#define OOCD_SWD_H
-
-
 #ifdef HAVE_CONFIG_H 
 #include "config.h"
 #endif
+
+#ifndef OOCD_SWD_H
+#define OOCD_SWD_H
 
 #include <libswd.h>
 #include <target/arm.h>
