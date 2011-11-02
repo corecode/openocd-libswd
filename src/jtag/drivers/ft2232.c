@@ -729,6 +729,9 @@ int ft2232_transfer(void *device, int bits, char *mosidata, char *misodata, int 
 	int retval, bit, i;
 	uint32_t bytes_written, bytes_read;
 
+	LOG_DEBUG("ft2232_transfer(device=@%p, bits=%d, mosidata=@%p, misodata=@%p, nLSDfirst=%d) ",\
+		(void*)device, bits, (void*)mosidata, (void*)misodata, nLSBfirst);
+
 	//No optimization for now, simply send one bit from one char element.
 	for (bit=0;bit<bits;bit++){
 		buf[0]=(nLSBfirst)?0x33:0x3b;	// Clock Bits In and Out LSb or MSb first.
@@ -746,6 +749,8 @@ int ft2232_transfer(void *device, int bits, char *mosidata, char *misodata, int 
 		}
 		// FTDI MPSSE returns shift register value, our bit is MSb 
 		misodata[bit]=(misodata[bit]&(nLSBfirst?0x01:0x80))?1:0;
+		//USE THIS FOR WIRE-LEVEL DEBUG
+		//LOG_DEBUG("read 0x%02X written 0x%02X", misodata[bit], mosidata[bit]);
 	}
 
 	/* Check if MPSSE ERROR occured and print info if so. */
