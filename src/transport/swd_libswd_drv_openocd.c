@@ -62,7 +62,7 @@ int swd_drv_mosi_8(swd_ctx_t *swdctx, swd_cmd_t *cmd, char *data, int bits, int 
  static char misodata[8], mosidata[8];
 
  /* Split output data into char array. */
- for (i=0;i<8;i++) mosidata[(nLSBfirst==SWD_DIR_LSBFIRST)?(i):(7-i)]=((1<<i)&(*data))?1:0; 
+ for (i=0;i<8;i++) mosidata[(nLSBfirst==SWD_DIR_LSBFIRST)?(i):(bits-1-i)]=((1<<i)&(*data))?1:0; 
  /* Then send that array into interface hardware. */
  res=jtag_interface->transfer(NULL, bits, mosidata, misodata, 0);
  if (res<0) return SWD_ERROR_DRIVER;
@@ -91,7 +91,7 @@ int swd_drv_mosi_32(swd_ctx_t *swdctx, swd_cmd_t *cmd, int *data, int bits, int 
  static char misodata[32], mosidata[32];
 
  //UrJTAG drivers shift data LSB-First.
- for (i=0;i<32;i++) mosidata[(nLSBfirst==SWD_DIR_LSBFIRST)?(i):(31-i)]=((1<<i)&(*data))?1:0; 
+ for (i=0;i<32;i++) mosidata[(nLSBfirst==SWD_DIR_LSBFIRST)?(i):(bits-1-i)]=((1<<i)&(*data))?1:0; 
  res=jtag_interface->transfer(NULL, bits, mosidata, misodata, 0);
  if (res<0) return SWD_ERROR_DRIVER;
  return i;
@@ -116,12 +116,11 @@ int swd_drv_miso_8(swd_ctx_t *swdctx, swd_cmd_t *cmd, char *data, int bits, int 
  static signed int res;
  static char misodata[8], mosidata[8];
 
- // This function sends and reveice MSb-first.
- res=jtag_interface->transfer(NULL, bits, mosidata, misodata, 0);
+ res=jtag_interface->transfer(NULL, bits, mosidata, misodata, SWD_DIR_LSBFIRST);
  if (res<0) return SWD_ERROR_DRIVER;
  /* Now we need to reconstruct the data byte from shifted in LSBfirst byte array. */
  *data=0;
- for (i=0;i<bits;i++) *data|=(misodata[(nLSBfirst==SWD_DIR_LSBFIRST)?(bits-1-i):(i)]?(1<<i):0);
+ for (i=0;i<bits;i++) *data|=misodata[(nLSBfirst==SWD_DIR_LSBFIRST)?(i):(bits-1-i)]?(1<<i):0;
  LOG_DEBUG("OpenOCD's swd_drv_miso_8(swdctx=@%p, cmd=@%p, data=@%p, bits=%d, nLSBfirst=0x%02X) reads: 0x%02X", (void*)swdctx, (void*)cmd, (void*)data, bits, nLSBfirst, *data);
  return i;
 }
@@ -145,11 +144,11 @@ int swd_drv_miso_32(swd_ctx_t *swdctx, swd_cmd_t *cmd, int *data, int bits, int 
  static signed int res;
  static char misodata[32], mosidata[32];
 
- res=jtag_interface->transfer(NULL, bits, mosidata, misodata, 0);
+ res=jtag_interface->transfer(NULL, bits, mosidata, misodata, SWD_DIR_LSBFIRST);
  if (res<0) return SWD_ERROR_DRIVER;
  /* Now we need to reconstruct the data byte from shifted in LSBfirst byte array. */
  *data=0;
- for (i=0;i<bits;i++) *data|=(misodata[(nLSBfirst==SWD_DIR_LSBFIRST)?(bits-1-i):(i)]?(1<<i):0);
+ for (i=0;i<bits;i++) *data|=(misodata[(nLSBfirst==SWD_DIR_LSBFIRST)?(i):(bits-1-i)]?(1<<i):0);
  LOG_DEBUG("OpenOCD's swd_drv_miso_32(swdctx=@%p, cmd=@%p, data=@%p, bits=%d, nLSBfirst=0x%02X) reads: 0x%08X", (void*)swdctx, (void*)cmd, (void*)data, bits, nLSBfirst, *data);
  LOG_DEBUG("OpenOCD's swd_drv_miso_32() reads: 0x%08X\n", *data);
  return i;
