@@ -695,7 +695,7 @@ int mem_ap_read_buf_u32(struct adiv5_dap *dap, uint8_t *buffer,
 //	uint32_t invalue, adr = address;
 //	uint8_t* pBuffer = buffer;
 
-	int i, retval;
+	int i, retval=ERROR_FAIL;
 	uint32_t invalue;
 	//count >>= 2;
 //	wcount = count;
@@ -1176,7 +1176,7 @@ int dap_get_debugbase(struct adiv5_dap *dap, int ap,
 {
 	uint32_t ap_old;
 	int retval;
-	uint32_t dbgbase, apid, idcode;
+	uint32_t dbgbase, apid; //, idcode;
 
 	/* AP address is in bits 31:24 of DP_SELECT */
 	if (ap >= 256)
@@ -1199,7 +1199,7 @@ int dap_get_debugbase(struct adiv5_dap *dap, int ap,
 	struct jtag_tap *tap = dap->jtag_info->tap;
 	while (tap != NULL) {
 		if (tap->hasidcode) {
-			idcode = tap->idcode;
+			//idcode = tap->idcode;
 			break;
 		}
 		tap = tap->next_tap;
