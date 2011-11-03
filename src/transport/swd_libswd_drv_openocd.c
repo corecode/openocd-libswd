@@ -266,11 +266,10 @@ int swd_log(swd_ctx_t *swdctx, swd_loglevel_t loglevel, char *msg, ...){
  if (loglevel > SWD_LOGLEVEL_MAX) return SWD_ERROR_PARAM; 
 
  if (loglevel > swdctx->config.loglevel) return SWD_OK;
- int res;
  va_list ap;
  va_start(ap, msg);
  // Calling OpenOCD log functions here will cause program crash (va recurrent).
- res=vprintf(msg, ap);
+ vprintf(msg, ap);
  va_end(ap);
  return SWD_OK;
 }
