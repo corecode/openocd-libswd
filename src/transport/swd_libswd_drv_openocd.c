@@ -227,7 +227,7 @@ int swd_log_level_inherit(swd_ctx_t *swdctx, int loglevel){
  swd_loglevel_t new_swdlevel;
  switch ((loglevel==-1)?debug_level:loglevel){
   case LOG_LVL_DEBUG:
-   new_swdlevel=SWD_LOGLEVEL_DEBUG;
+   new_swdlevel=SWD_LOGLEVEL_PAYLOAD;
    break;
   case LOG_LVL_INFO:
    new_swdlevel=SWD_LOGLEVEL_INFO;
