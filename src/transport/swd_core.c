@@ -53,7 +53,7 @@ extern struct jtag_interface *jtag_interface;
 
 int oocd_swd_queue_idcode_read(struct adiv5_dap *dap, uint8_t *ack, uint32_t *data){
 	int retval;
-	retval=swd_dp_read_idcode(dap->ctx, SWD_OPERATION_ENQUEUE, (int **)&data);
+	retval=swd_dp_read_idcode(dap->ctx, SWD_OPERATION_EXECUTE, (int**) &data);
 	if (retval<0) {
 		LOG_ERROR("swd_dp_read_idcode() error: %s ", swd_error_string(retval));
 		return ERROR_FAIL;
@@ -62,7 +62,7 @@ int oocd_swd_queue_idcode_read(struct adiv5_dap *dap, uint8_t *ack, uint32_t *da
 
 int oocd_swd_queue_dp_read(struct adiv5_dap *dap, unsigned reg, uint32_t *data){
 	int retval;
-	retval=swd_dp_read((swd_ctx_t *)dap->ctx, SWD_OPERATION_ENQUEUE, reg, (int **)&data);
+	retval=swd_dp_read((swd_ctx_t *)dap->ctx, SWD_OPERATION_EXECUTE, reg, (int**) &data);
 	if (retval<0){
 		LOG_ERROR("swd_dp_read() error: %s ", swd_error_string(retval));
 		return ERROR_FAIL;
@@ -82,7 +82,7 @@ int oocd_swd_queue_dp_write(struct adiv5_dap *dap, unsigned reg, uint32_t data){
 
 int oocd_swd_queue_ap_read(struct adiv5_dap *dap, unsigned reg, uint32_t *data){
 	int retval;
-	retval=swd_ap_read((swd_ctx_t *)dap->ctx, SWD_OPERATION_ENQUEUE, (char) reg, (int **) &data);
+	retval=swd_ap_read((swd_ctx_t *)dap->ctx, SWD_OPERATION_EXECUTE, (char) reg, (int**) &data);
 	if (retval<0){
 		LOG_ERROR("swd_ap_read() error: %s ", swd_error_string(retval));
 		return ERROR_FAIL;
