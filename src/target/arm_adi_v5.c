@@ -1096,9 +1096,21 @@ int ahbap_debugport_init(struct adiv5_dap *dap)
 	if (retval != ERROR_OK)
 		return retval;
 
-	retval = dap_queue_dp_write(dap, DP_CTRL_STAT, SSTICKYERR);
-	if (retval != ERROR_OK)
-		return retval;
+	//Sticky Flags handling is different for JTAG and SWD.
+	//TODO: Create one function that will take care of error handling based on transport type.
+     if ((strncmp(jtag_interface->transport->name, "swd", 3)==0)) {
+		//Clear error flags on SW-DP
+	     retval = dap_queue_dp_write(dap, DP_ABORT, \
+			SWD_DP_ABORT_ORUNERRCLR|SWD_DP_ABORT_WDERRCLR \
+			|SWD_DP_ABORT_STKERRCLR|SWD_DP_ABORT_STKCMPCLR);
+	     if (retval != ERROR_OK)
+     	     return retval;
+     } else {
+		//Clear error flags on JTAG-DP
+		retval = dap_queue_dp_write(dap, DP_CTRL_STAT, SSTICKYERR);
+		if (retval != ERROR_OK)
+			return retval;
+	}
 
 	retval = dap_queue_dp_read(dap, DP_CTRL_STAT, NULL);
 	if (retval != ERROR_OK)
@@ -1137,6 +1149,10 @@ int ahbap_debugport_init(struct adiv5_dap *dap)
 			return retval;
 		alive_sleep(10);
 	}
+
+	//TC: Here CDBGPWRUPACK|CSYSPWRUPACK still may not be set!
+	//TODO: Should we proceed anyway?
+	if (cnt>=10) LOG_ERROR("CDBGPWRUPACK|CSYSPWRUPACK FLAGS NOT SET IN RESPONSE!");
 
 	retval = dap_queue_dp_read(dap, DP_CTRL_STAT, NULL);
 	if (retval != ERROR_OK)
