@@ -1,3 +1,9 @@
+//Tomek Cedro TODO:
+//-create context for openocd thread started from main
+//-context should contain all structures such as transport target etc
+//-interface should be able to init without target to prepare hardware for init (reset, etc).
+//-transport should have its own context so it should prepare bus before target init
+//
 // This file is part of the Doxygen Developer Manual
 /** @page tasks Pending and Open Tasks
 
