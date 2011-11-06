@@ -1150,9 +1150,12 @@ int ahbap_debugport_init(struct adiv5_dap *dap)
 		alive_sleep(10);
 	}
 
-	//TC: Here CDBGPWRUPACK|CSYSPWRUPACK still may not be set!
-	//TODO: Should we proceed anyway?
-	if (cnt>=10) LOG_ERROR("CDBGPWRUPACK|CSYSPWRUPACK FLAGS NOT SET IN RESPONSE!");
+	//TC: At this point CDBGPWRUPACK|CSYSPWRUPACK still may not be set!
+	// We should not proceed, it may indicate target failure...
+	if (cnt>=10) {
+		LOG_ERROR("CDBGPWRUPACK|CSYSPWRUPACK FLAGS NOT SET IN RESPONSE!");
+		return(ERROR_FAIL);
+	}
 
 	retval = dap_queue_dp_read(dap, DP_CTRL_STAT, NULL);
 	if (retval != ERROR_OK)
