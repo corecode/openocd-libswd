@@ -49,6 +49,9 @@
 
 extern struct command_context *global_cmd_ctx;
 
+//TC: Adding global here in order to set transport when initialized.
+extern struct jtag_interface *jtag_interface;
+
 
 /*-----------------------------------------------------------------------*/
 
@@ -266,6 +269,9 @@ COMMAND_HANDLER(handle_transport_init)
 		return ERROR_FAIL;
 	}
 
+	//TC: Transport needs to be set in jtag_interface structure.
+	//jtag_interface is still global, need to move it into context.
+	jtag_interface->transport = session_transport;
 	return session_transport->init(CMD_CTX);
 }
 
