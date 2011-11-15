@@ -269,7 +269,7 @@ static int jtagdp_transaction_endcheck(struct adiv5_dap *dap)
 	/* REVISIT also STICKYCMP, for pushed comparisons (nyet used) */
 
 	/* Check for STICKYERR and STICKYORUN */
-	if (ctrlstat & (SSTICKYORUN | SSTICKYERR))
+	if (ctrlstat & (STICKYORUN | STICKYERR))
 	{
 		LOG_DEBUG("jtag-dp: CTRL/STAT error, 0x%" PRIx32, ctrlstat);
 		/* Check power to debug regions */
@@ -296,18 +296,18 @@ static int jtagdp_transaction_endcheck(struct adiv5_dap *dap)
 					dap->ap_csw_value,
 					dap->ap_tar_value);
 
-			if (ctrlstat & SSTICKYORUN)
+			if (ctrlstat & STICKYORUN)
 				LOG_ERROR("JTAG-DP OVERRUN - check clock, "
 					"memaccess, or reduce jtag speed");
 
-			if (ctrlstat & SSTICKYERR)
+			if (ctrlstat & STICKYERR)
 				LOG_ERROR("JTAG-DP STICKY ERROR");
 
 			/* Clear Sticky Error Bits */
 			retval = adi_jtag_scan_inout_check_u32(dap, JTAG_DP_DPACC,
 					DP_CTRL_STAT, DPAP_WRITE,
-					dap->dp_ctrl_stat | SSTICKYORUN
-						| SSTICKYERR, NULL);
+					dap->dp_ctrl_stat | STICKYORUN
+						| STICKYERR, NULL);
 			if (retval != ERROR_OK)
 				return retval;
 			retval = adi_jtag_scan_inout_check_u32(dap, JTAG_DP_DPACC,

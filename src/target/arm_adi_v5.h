@@ -42,8 +42,8 @@
 
 /* three-bit ACK values for SWD access (sent LSB first) */
 #define SWD_ACK_OK		0x1
-#define SWD_ACK_WAIT		0x2
-#define SWD_ACK_FAULT		0x4
+#define SWD_ACK_WAIT	0x2
+#define SWD_ACK_FAULT	0x4
 
 #define DPAP_WRITE		0
 #define DPAP_READ		1
@@ -55,7 +55,7 @@
  */
 #define DP_IDCODE		0		/* SWD: read */
 #define DP_ABORT		0		/* SWD: write */
-#define DP_CTRL_STAT		0x4		/* r/w */
+#define DP_CTRL_STAT	0x4		/* r/w */
 #define DP_WCR			0x4		/* SWD: r/w (mux CTRLSEL) */
 #define DP_RESEND		0x8		/* SWD: read */
 #define DP_SELECT		0x8		/* JTAG: r/w; SWD: write */
@@ -73,10 +73,10 @@
 
 /* Fields of the DP's CTRL/STAT register */
 #define CORUNDETECT		(1 << 0)
-#define SSTICKYORUN		(1 << 1)
+#define STICKYORUN		(1 << 1)
 /* 3:2 - transaction mode (e.g. pushed compare) */
-#define SSTICKYCMP		(1 << 4)
-#define SSTICKYERR		(1 << 5)
+#define STICKYCMP		(1 << 4)
+#define STICKYERR		(1 << 5)
 #define READOK			(1 << 6)	/* SWD-only */
 #define WDATAERR		(1 << 7)	/* SWD-only */
 /* 11:8 - mask lanes for pushed compare or verify ops */

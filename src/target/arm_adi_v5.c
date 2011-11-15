@@ -50,7 +50,7 @@
  * transaction queue.  This primarily affects AP operations (such as using
  * a MEM-AP to access memory or registers).  If the current transaction has
  * not finished by the time the next one must begin, and the ORUNDETECT bit
- * is set in the DP_CTRL_STAT register, the SSTICKYORUN status is set and
+ * is set in the DP_CTRL_STAT register, the STICKYORUN status is set and
  * further AP operations will fail.  There are two basic methods to avoid
  * such overrun errors.  One involves polling for status instead of using
  * transaction piplining.  The other involves adding delays to ensure the
@@ -1172,7 +1172,7 @@ int ahbap_debugport_init(struct adiv5_dap *dap)
      	     return retval;
      } else {
 		//Clear error flags on JTAG-DP
-		retval = dap_queue_dp_write(dap, DP_CTRL_STAT, SSTICKYERR);
+		retval = dap_queue_dp_write(dap, DP_CTRL_STAT, STICKYERR);
 		if (retval != ERROR_OK)
 			return retval;
 	}
