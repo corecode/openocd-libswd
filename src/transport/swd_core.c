@@ -103,10 +103,15 @@ int oocd_swd_queue_ap_write(struct adiv5_dap *dap, unsigned reg, uint32_t data){
 }
 
 int oocd_swd_queue_ap_abort(struct adiv5_dap *dap, uint8_t *ack){
-	//int retval;
-	//char reg=SWD_DP_ABORT_ADDR;
-     LOG_ERROR("oocd_swd_queue_ap_abort() not yet implemented");
-	return ERROR_FAIL;
+	int retval;
+	int abort_flags = SWD_DP_ABORT_ORUNERRCLR | SWD_DP_ABORT_WDERRCLR | SWD_DP_ABORT_STKERRCLR \
+					| SWD_DP_ABORT_STKCMPCLR | SWD_DP_ABORT_DAPABORT;
+	retval=swd_dp_write((swd_ctx_t *)dap->ctx, SWD_OPERATION_EXECUTE, SWD_DP_ABORT_ADDR, &abort_flags);
+	if (retval<0){
+		LOG_ERROR("swd_dp_write(ABORT) error: %s ", swd_error_string(retval));
+		return ERROR_FAIL;
+	}
+	return ERROR_OK;
 }
 
 int oocd_swd_run(struct adiv5_dap *dap){
