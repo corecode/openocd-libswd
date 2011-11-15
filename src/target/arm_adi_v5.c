@@ -127,6 +127,7 @@ void dap_ap_select(struct adiv5_dap *dap,uint8_t ap)
 /**
  * Queue transactions setting up transfer parameters for the
  * currently selected MEM-AP.
+ * This function does not flush the queue, only append elements.
  *
  * Subsequent transfers using registers like AP_REG_DRW or AP_REG_BD2
  * initiate data reads or writes using memory or peripheral addresses.
@@ -577,14 +578,14 @@ extern int adi_jtag_dp_scan(struct adiv5_dap *dap,
 		uint8_t *outvalue, uint8_t *invalue, uint8_t *ack);
 
 /**
- * Synchronously read a block of 32-bit words into a buffer
+ * Synchronously read a block of 32-bit words into a buffer using JTAG.
  * @param dap The DAP connected to the MEM-AP.
  * @param buffer where the words will be stored (in host byte order).
  * @param count How many words to read.
  * @param address Memory address from which to read words; all the
  *	words must be readable by the currently selected MEM-AP.
  */
-int mem_ap_read_buf_u32_old(struct adiv5_dap *dap, uint8_t *buffer,
+int mem_ap_read_buf_u32_jtag(struct adiv5_dap *dap, uint8_t *buffer,
 		int count, uint32_t address)
 {
 	int wcount, blocksize, readcount, errorcount = 0, retval = ERROR_OK;
@@ -688,7 +689,15 @@ int mem_ap_read_buf_u32_old(struct adiv5_dap *dap, uint8_t *buffer,
 }
 
 
-int mem_ap_read_buf_u32(struct adiv5_dap *dap, uint8_t *buffer,
+/**
+ * Synchronously read a block of 32-bit words into a buffer using SWD.
+ * @param dap The DAP connected to the MEM-AP.
+ * @param buffer where the words will be stored (in host byte order).
+ * @param count How many words to read.
+ * @param address Memory address from which to read words; all the
+ *	words must be readable by the currently selected MEM-AP.
+ */
+int mem_ap_read_buf_u32_swd(struct adiv5_dap *dap, uint8_t *buffer,
 		int count, uint32_t address)
 {
 //	int wcount, blocksize, readcount, errorcount = 0, retval = ERROR_OK;
@@ -699,37 +708,74 @@ int mem_ap_read_buf_u32(struct adiv5_dap *dap, uint8_t *buffer,
 	uint32_t invalue;
 	//count >>= 2;
 //	wcount = count;
+	int retry;	//TC: dirty check to retry whole access before failing.
+	int delay=10, maxretry=30; 	//TC: delay will double with each retry.
 
-	while (count > 0)
-	{
-		retval = dap_setup_accessport(dap, CSW_32BIT | CSW_ADDRINC_SINGLE, address);
-		if (retval != ERROR_OK)
-			return retval;
-		retval = dap_queue_ap_read(dap, AP_REG_DRW, &invalue);
-		if (retval != ERROR_OK)
-			break;
+	for (retry=maxretry;retry;retry--){
 
-		retval = dap_run(dap);
-		if (retval != ERROR_OK)
-			break;
-
-		if (address & 0x3u)
+		while (count > 0)
 		{
-			for (i = 0; i < 4; i++)
-			{
-				*((uint8_t*)buffer) = (invalue >> 8 * (address & 0x3));
-				buffer++;
-				address++;
+			//TC: This function does not flush the queue, so we won't get ACK here.
+			retval = dap_setup_accessport(dap, CSW_32BIT | CSW_ADDRINC_SINGLE, address);
+			if (retval != ERROR_OK)
+				return retval;
+			retval = dap_queue_ap_read(dap, AP_REG_DRW, &invalue);
+			if (retval != ERROR_OK){
+				//TC: The response was not OK, so we need to clear STICKYERR flags and retry transfer
+				uint32_t ctrlstatval=0, abortval=0;
+				retval=dap_queue_dp_read(dap, DP_CTRL_STAT, &ctrlstatval);	
+				if (retval!=ERROR_OK){
+					LOG_ERROR("Error in error handling (cannot read CTRL/STAT), transfer failed permanently, I give up :-)");
+					return retval;
+				}
+				LOG_WARNING("ACK!=OK at %d try, delay is %dus, CTRL/STAT=%X, retrying...", maxretry-retry, delay, ctrlstatval);
+
+				//TC: According to ADIv5.0 (ARM IHI 0031A):
+				// 3.1.1. STICKYERR might be set when debug domain is powered down.
+				// 3.1.2. STICKYORUN is set when overrun occurs.
+				// 3.1.3. WDATAERR is set on write data parity mismatch.
+				// 3.2. pushed compare sets STICKYCMP to 1 if the values match, pushed verify sets STICKYCMP to 1 if the values do not match.
+
+				abortval=0;
+				abortval|=(ctrlstatval&STICKYORUN)?ORUNERRCLR:0;
+				abortval|=(ctrlstatval&STICKYERR)?STKERRCLR:0;
+				abortval|=(ctrlstatval&STICKYCMP)?STKCMPCLR:0;
+				LOG_WARNING("CTRL/STAT=%X, writing %X to ABORT register (clearing sticky error flags)", ctrlstatval, abortval);
+				retval=dap_queue_dp_write(dap, DP_ABORT, abortval);
+				if (retval!=ERROR_OK){
+					LOG_ERROR("Error in error handling (cannot queue ABORT write), transfer failed permanently, I give up :-)");
+					return retval;
+				}
+				retval=dap_run(dap);
+				if (retval!=ERROR_OK){
+					LOG_ERROR("Error in error handling (cannot flush the queue), transfer failed permanently, I give up :-)");
+					return retval;
+				}
+				usleep(delay);
+				delay*=2;
+				break;
 			}
+
+
+			LOG_INFO("COUNT=%d, ADDR=%X, BUFF=%x", count, address, invalue);
+			if (address & 0x3u)
+			{
+				for (i = 0; i < 4; i++)
+				{
+					*((uint8_t*)buffer) = (invalue >> 8 * (address & 0x3));
+					buffer++;
+					address++;
+				}
+			}
+			else
+			{
+				uint32_t svalue = (invalue >> 8 * (address & 0x3));
+				memcpy(buffer, &svalue, sizeof(uint32_t));
+				address += 4;
+				buffer += 4;
+			}
+			count -= 4;
 		}
-		else
-		{
-			uint32_t svalue = (invalue >> 8 * (address & 0x3));
-			memcpy(buffer, &svalue, sizeof(uint32_t));
-			address += 4;
-			buffer += 4;
-		}
-		count -= 4;
 	}
 
 	/* if we have an unaligned access - reorder data 
@@ -751,12 +797,31 @@ int mem_ap_read_buf_u32(struct adiv5_dap *dap, uint8_t *buffer,
 		}
 	}
 	*/
-
-	return retval;
+	if (retry) return ERROR_OK;
+	LOG_ERROR("mem_ap_read_buf_u32_swd() Read failed permenently!");
+	return ERROR_FAIL;
 }
 
-
-
+/**
+ * Synchronously read a block of 32-bit words into a buffer.
+ * @param dap The DAP connected to the MEM-AP.
+ * @param buffer where the words will be stored (in host byte order).
+ * @param count How many words to read.
+ * @param address Memory address from which to read words; all the
+ *	words must be readable by the currently selected MEM-AP.
+ */
+int mem_ap_read_buf_u32(struct adiv5_dap *dap, uint8_t *buffer,
+          int count, uint32_t address)
+{
+     if (strncmp(jtag_interface->transport->name, "swd", 3)==0) {
+		return mem_ap_read_buf_u32_swd(dap, buffer, count, address);
+     } else if (strncmp(jtag_interface->transport->name, "jtag", 4)==0) {
+		return mem_ap_read_buf_u32_jtag(dap, buffer, count, address);
+     } else {
+		LOG_ERROR("unsupported transport!");
+		return ERROR_FAIL;
+	}
+}
 
 static int mem_ap_read_buf_packed_u16(struct adiv5_dap *dap,
 		uint8_t *buffer, int count, uint32_t address)
