@@ -705,7 +705,7 @@ int mem_ap_read_buf_u32_swd(struct adiv5_dap *dap, uint8_t *buffer,
 	uint8_t* pBuffer = buffer;
 
 	int retry, iretry, iiretry;	//TC: dirty check to retry whole access before failing.
-	int delay=1, maxretry=3; 	//TC: delay will double with each retry.
+	int maxretry=5; 	//TC: delay will double with each retry.
 
 	for (retry=maxretry;retry;retry--){
 
@@ -713,108 +713,58 @@ int mem_ap_read_buf_u32_swd(struct adiv5_dap *dap, uint8_t *buffer,
 		{
 			// Setup the AP
 			for (iretry=maxretry;iretry;iretry--){
-				//TC: This function does not flush the queue, so we won't get ACK here.
-				LOG_INFO("Setting up the AP");
-//				retval = dap_setup_accessport(dap, CSW_32BIT | CSW_ADDRINC_SINGLE, address);
+				// Auti-Increment may fail at this point so we don't use it here for now!
 				retval = dap_setup_accessport(dap, CSW_32BIT, address);
 				if (retval != ERROR_OK) {
-					LOG_ERROR("Setup queue failed!");
+					LOG_ERROR("AP Setup enqueue failed!");
 					continue;
 				}
 				retval = dap_run(dap);
 				if (retval != ERROR_OK) {
-					LOG_ERROR("Setup queue flush failed!");
-					alive_sleep(delay);
-					delay+=delay;
+					LOG_ERROR("AP Setup queue flush failed!");
 					continue;
 				}
-//			}
-//			if (!iretry) break;
-
-			// Initiate memory access by reading the DRW register.
-			// Then read the READOK until 1 or max retry.
-			// If READOK=1 then read the RDBUFF with our esult.
-//			for (iretry=maxretry;iretry;iretry--){
-				delay=1;
-//				LOG_INFO("Starting read AP_REG_DRW");
-//				retval = dap_queue_ap_read(dap, AP_REG_DRW, &invalue);
-//				if (retval == ERROR_OK) {
-//					LOG_INFO("AP_REG_DRW READ OK");
-//					break;
-//				}
-//				LOG_INFO("Read failed!");
+				// Now as AP is setup we need to read the data.
+				// AP will return WAIT when data not ready, so we need to retry DRW access.
+				// CTRL/STAT{READOK} is set only after ACK=OK so it does not show it AP has finished!!!
+				// According to ARM documentation reading DRW initiates memory access, so
+				//  retrying DRW reads would always produce WAIT. Wrong!
+				// We need to read DRW until ACK=OK, this is practical way to read from AP.
+				// After we get OK, we need to chech READOK flag, then read result from RDATA!!!
 				for (iiretry=maxretry;iiretry;iiretry--){
-					LOG_INFO("Starting read AP_REG_DRW");
 					retval = dap_queue_ap_read(dap, AP_REG_DRW, &invalue);
-					if (retval == ERROR_OK) {
-						LOG_INFO("AP_REG_DRW READ OK");
-//						break;
-					}
-					LOG_INFO("Read failed!");
+					if (retval == ERROR_OK) break;
 
-					LOG_INFO("Reading out the CTRL/STAT value to check error flags");
 					retval = dap_queue_dp_read(dap, DP_CTRL_STAT, &ctrlstatval);
-					if (ctrlstatval&READOK) {
-						LOG_INFO("READOK=1");
+					if (retval != ERROR_OK) {
+						LOG_ERROR("Cannot read CTRL/STAT!");
+						continue;
+					}
+					retval = dap_queue_dp_write(dap, DP_ABORT, 0x00000014);
+					if (retval != ERROR_OK){
+						LOG_ERROR("Cannot enqueue ABORT write");
+						continue;
+					}
+					retval = dap_run(dap);
+					if (retval != ERROR_OK) {
+						LOG_ERROR("Cannot flush queued ABORT write");
+						continue;
+					}
+				 }
+				// ARM BUG!? Even that we get ACK=OK we need to read the result from RDBUFF.
+				// RESEND will produce bad value. Data returned after ACK=OK is also bad.
+				if (retval == ERROR_OK) {
+					retval = dap_queue_dp_read(dap, DP_CTRL_STAT, &ctrlstatval);
+					if (ctrlstatval&READOK){
+						dap_queue_dp_read(dap, DP_RDBUFF, &invalue);
 						break;
 					}
-					alive_sleep(delay);
-					delay+=delay;
-					LOG_INFO("Writing ABORT");
-					retval = dap_queue_dp_write(dap, DP_ABORT, 0x00000014);
-					retval = dap_run(dap);
-					if (retval != ERROR_OK) continue;
-				}
-				if (ctrlstatval&READOK){
-					//Nowe we read the RDBUFF
-					LOG_INFO("READOK is set, now read the data result");
-					retval = dap_queue_dp_read(dap, DP_RDBUFF, &invalue); 
-					if (retval == ERROR_OK) break;
-					LOG_ERROR("Error reading RDBUFF (after READOK=1).");
-				} else {
-					LOG_INFO("READOK != 1, read will return invalid data!!!!");
-				}
+				};
 			}
-			if (!iretry) {
-				LOG_ERROR("READ FAILED!");
+			if (!iretry && !iiretry) {
+				LOG_ERROR("MEM-AP READ FAILED, RETRYING...");
 				break;
 			}
-
-
-/*				uint32_t ctrlstatval=0, abortval=0;
-				retval=dap_queue_dp_read(dap, DP_CTRL_STAT, &ctrlstatval);	
-				if (retval!=ERROR_OK){
-					LOG_ERROR("Error in error handling (cannot read CTRL/STAT), transfer failed permanently, I give up :-)");
-					return retval;
-				}
-				LOG_WARNING("ACK!=OK at %d try, delay is %dus, CTRL/STAT=%X, retrying...", maxretry-retry, delay, ctrlstatval);
-
-				//TC: According to ADIv5.0 (ARM IHI 0031A):
-				// 3.1.1. STICKYERR might be set when debug domain is powered down.
-				// 3.1.2. STICKYORUN is set when overrun occurs.
-				// 3.1.3. WDATAERR is set on write data parity mismatch.
-				// 3.2. pushed compare sets STICKYCMP to 1 if the values match, pushed verify sets STICKYCMP to 1 if the values do not match.
-
-				abortval=0;
-				abortval|=(ctrlstatval&STICKYORUN)?ORUNERRCLR:0;
-				abortval|=(ctrlstatval&STICKYERR)?STKERRCLR:0;
-				abortval|=(ctrlstatval&STICKYCMP)?STKCMPCLR:0;
-				LOG_WARNING("CTRL/STAT=0x%X, writing 0x%X to ABORT register (clearing sticky error flags)", ctrlstatval, abortval);
-				retval=dap_queue_dp_write(dap, DP_ABORT, abortval);
-				if (retval!=ERROR_OK) return retval;
-				retval=dap_run(dap);
-				if (retval!=ERROR_OK) return retval;
-				//Now verify is error flags are cleared
-				retval=dap_queue_dp_read(dap, DP_CTRL_STAT, &ctrlstatval);
-				if (retval!=ERROR_OK) return retval;
-				retval=dap_run(dap);
-				if (retval!=ERROR_OK) return retval;
-				LOG_WARNING("After clearing error flags CTRL/STAT=0x%X", ctrlstatval);
-				alive_sleep(delay);
-				delay*=2;
-				break;
-			}
-*/
 
 			LOG_INFO("COUNT=%d, ADDR=%X, BUFF=%x", count, address, invalue);
 			if (address & 0x3u)
@@ -834,8 +784,13 @@ int mem_ap_read_buf_u32_swd(struct adiv5_dap *dap, uint8_t *buffer,
 				buffer += 4;
 			}
 			count -= 4;
+	
 		}
 		if (count<=0) break;
+	}
+	if (!retry){
+		LOG_ERROR("MEM-AP READ FAILED AFTER %d RETRIES...", maxretry);
+		return ERROR_FAIL;
 	}
 
 	// if we have an unaligned access - reorder data 
@@ -855,7 +810,6 @@ int mem_ap_read_buf_u32_swd(struct adiv5_dap *dap, uint8_t *buffer,
 			}
 		}
 	}
-//	if (retry) return ERROR_OK;
 	return ERROR_OK;
 }
 
@@ -1267,7 +1221,6 @@ int ahbap_debugport_init(struct adiv5_dap *dap)
 			return retval;
 		if ((retval = dap_run(dap)) != ERROR_OK)
 			return retval;
-		alive_sleep(10);
 	}
 
 	// Wait for Debug Unit powerup to complete.
@@ -1279,7 +1232,6 @@ int ahbap_debugport_init(struct adiv5_dap *dap)
 			return retval;
 		if ((retval = dap_run(dap)) != ERROR_OK)
 			return retval;
-		alive_sleep(10);
 	}
 
 /*	// wait for debug unit reset to complete.
