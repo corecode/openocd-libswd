@@ -700,29 +700,88 @@ int mem_ap_read_buf_u32_jtag(struct adiv5_dap *dap, uint8_t *buffer,
 int mem_ap_read_buf_u32_swd(struct adiv5_dap *dap, uint8_t *buffer,
 		int count, uint32_t address)
 {
-//	int wcount, blocksize, readcount, errorcount = 0, retval = ERROR_OK;
-//	uint32_t invalue, adr = address;
-//	uint8_t* pBuffer = buffer;
+	int i, readcount,retval = ERROR_OK;
+	uint32_t invalue, adr = address, ctrlstatval;
+	uint8_t* pBuffer = buffer;
 
-	int i, retval=ERROR_FAIL;
-	uint32_t invalue;
-	//count >>= 2;
-//	wcount = count;
-	int retry;	//TC: dirty check to retry whole access before failing.
-	int delay=10, maxretry=30; 	//TC: delay will double with each retry.
+	int retry, iretry, iiretry;	//TC: dirty check to retry whole access before failing.
+	int delay=1, maxretry=3; 	//TC: delay will double with each retry.
 
 	for (retry=maxretry;retry;retry--){
 
 		while (count > 0)
 		{
-			//TC: This function does not flush the queue, so we won't get ACK here.
-			retval = dap_setup_accessport(dap, CSW_32BIT | CSW_ADDRINC_SINGLE, address);
-			if (retval != ERROR_OK)
-				return retval;
-			retval = dap_queue_ap_read(dap, AP_REG_DRW, &invalue);
-			if (retval != ERROR_OK){
-				//TC: The response was not OK, so we need to clear STICKYERR flags and retry transfer
-				uint32_t ctrlstatval=0, abortval=0;
+			// Setup the AP
+			for (iretry=maxretry;iretry;iretry--){
+				//TC: This function does not flush the queue, so we won't get ACK here.
+				LOG_INFO("Setting up the AP");
+//				retval = dap_setup_accessport(dap, CSW_32BIT | CSW_ADDRINC_SINGLE, address);
+				retval = dap_setup_accessport(dap, CSW_32BIT, address);
+				if (retval != ERROR_OK) {
+					LOG_ERROR("Setup queue failed!");
+					continue;
+				}
+				retval = dap_run(dap);
+				if (retval != ERROR_OK) {
+					LOG_ERROR("Setup queue flush failed!");
+					alive_sleep(delay);
+					delay+=delay;
+					continue;
+				}
+//			}
+//			if (!iretry) break;
+
+			// Initiate memory access by reading the DRW register.
+			// Then read the READOK until 1 or max retry.
+			// If READOK=1 then read the RDBUFF with our esult.
+//			for (iretry=maxretry;iretry;iretry--){
+				delay=1;
+//				LOG_INFO("Starting read AP_REG_DRW");
+//				retval = dap_queue_ap_read(dap, AP_REG_DRW, &invalue);
+//				if (retval == ERROR_OK) {
+//					LOG_INFO("AP_REG_DRW READ OK");
+//					break;
+//				}
+//				LOG_INFO("Read failed!");
+				for (iiretry=maxretry;iiretry;iiretry--){
+					LOG_INFO("Starting read AP_REG_DRW");
+					retval = dap_queue_ap_read(dap, AP_REG_DRW, &invalue);
+					if (retval == ERROR_OK) {
+						LOG_INFO("AP_REG_DRW READ OK");
+//						break;
+					}
+					LOG_INFO("Read failed!");
+
+					LOG_INFO("Reading out the CTRL/STAT value to check error flags");
+					retval = dap_queue_dp_read(dap, DP_CTRL_STAT, &ctrlstatval);
+					if (ctrlstatval&READOK) {
+						LOG_INFO("READOK=1");
+						break;
+					}
+					alive_sleep(delay);
+					delay+=delay;
+					LOG_INFO("Writing ABORT");
+					retval = dap_queue_dp_write(dap, DP_ABORT, 0x00000014);
+					retval = dap_run(dap);
+					if (retval != ERROR_OK) continue;
+				}
+				if (ctrlstatval&READOK){
+					//Nowe we read the RDBUFF
+					LOG_INFO("READOK is set, now read the data result");
+					retval = dap_queue_dp_read(dap, DP_RDBUFF, &invalue); 
+					if (retval == ERROR_OK) break;
+					LOG_ERROR("Error reading RDBUFF (after READOK=1).");
+				} else {
+					LOG_INFO("READOK != 1, read will return invalid data!!!!");
+				}
+			}
+			if (!iretry) {
+				LOG_ERROR("READ FAILED!");
+				break;
+			}
+
+
+/*				uint32_t ctrlstatval=0, abortval=0;
 				retval=dap_queue_dp_read(dap, DP_CTRL_STAT, &ctrlstatval);	
 				if (retval!=ERROR_OK){
 					LOG_ERROR("Error in error handling (cannot read CTRL/STAT), transfer failed permanently, I give up :-)");
@@ -740,22 +799,22 @@ int mem_ap_read_buf_u32_swd(struct adiv5_dap *dap, uint8_t *buffer,
 				abortval|=(ctrlstatval&STICKYORUN)?ORUNERRCLR:0;
 				abortval|=(ctrlstatval&STICKYERR)?STKERRCLR:0;
 				abortval|=(ctrlstatval&STICKYCMP)?STKCMPCLR:0;
-				LOG_WARNING("CTRL/STAT=%X, writing %X to ABORT register (clearing sticky error flags)", ctrlstatval, abortval);
+				LOG_WARNING("CTRL/STAT=0x%X, writing 0x%X to ABORT register (clearing sticky error flags)", ctrlstatval, abortval);
 				retval=dap_queue_dp_write(dap, DP_ABORT, abortval);
-				if (retval!=ERROR_OK){
-					LOG_ERROR("Error in error handling (cannot queue ABORT write), transfer failed permanently, I give up :-)");
-					return retval;
-				}
+				if (retval!=ERROR_OK) return retval;
 				retval=dap_run(dap);
-				if (retval!=ERROR_OK){
-					LOG_ERROR("Error in error handling (cannot flush the queue), transfer failed permanently, I give up :-)");
-					return retval;
-				}
-				usleep(delay);
+				if (retval!=ERROR_OK) return retval;
+				//Now verify is error flags are cleared
+				retval=dap_queue_dp_read(dap, DP_CTRL_STAT, &ctrlstatval);
+				if (retval!=ERROR_OK) return retval;
+				retval=dap_run(dap);
+				if (retval!=ERROR_OK) return retval;
+				LOG_WARNING("After clearing error flags CTRL/STAT=0x%X", ctrlstatval);
+				alive_sleep(delay);
 				delay*=2;
 				break;
 			}
-
+*/
 
 			LOG_INFO("COUNT=%d, ADDR=%X, BUFF=%x", count, address, invalue);
 			if (address & 0x3u)
@@ -776,14 +835,14 @@ int mem_ap_read_buf_u32_swd(struct adiv5_dap *dap, uint8_t *buffer,
 			}
 			count -= 4;
 		}
+		if (count<=0) break;
 	}
 
-	/* if we have an unaligned access - reorder data 
+	// if we have an unaligned access - reorder data 
 	if (adr & 0x3u)
 	{
 		for (readcount = 0; readcount < count; readcount++)
 		{
-			int i;
 			uint32_t data;
 			memcpy(&data, pBuffer, sizeof(uint32_t));
 
@@ -796,10 +855,8 @@ int mem_ap_read_buf_u32_swd(struct adiv5_dap *dap, uint8_t *buffer,
 			}
 		}
 	}
-	*/
-	if (retry) return ERROR_OK;
-	LOG_ERROR("mem_ap_read_buf_u32_swd() Read failed permenently!");
-	return ERROR_FAIL;
+//	if (retry) return ERROR_OK;
+	return ERROR_OK;
 }
 
 /**
@@ -1155,19 +1212,26 @@ int ahbap_debugport_init(struct adiv5_dap *dap)
 	dap->ap_current = !0;
 	dap_ap_select(dap, 0);
 
-	/* DP initialization */
+	// Reset the debug subsystem - CDBGRSTREQ does not work
+	// Writing zeros to SELECT and/or CTRLSTAT produce ACK=FAULT, why???
+	// Make sure SELECT has known values, zero APSEL, APBANKSEL, CTRLSEL.
+//	retval = dap_queue_dp_write(dap, DP_SELECT, 0);
+//	if (retval != ERROR_OK) return retval;
+//	retval = dap_run(dap);
+//	if (retval != ERROR_OK) return retval;
+//	retval = dap_queue_dp_write(dap, DP_CTRL_STAT, 0);
+//	if (retval != ERROR_OK) return retval;
 
 	retval = dap_queue_dp_read(dap, DP_CTRL_STAT, NULL);
-	if (retval != ERROR_OK)
-		return retval;
+	if (retval != ERROR_OK) return retval;
 
 	//Sticky Flags handling is different for JTAG and SWD.
 	//TODO: Create one function that will take care of error handling based on transport type.
+	//Abort does not clear sticky error flags.
      if ((strncmp(jtag_interface->transport->name, "swd", 3)==0)) {
 		//Clear error flags on SW-DP
 	     retval = dap_queue_dp_write(dap, DP_ABORT, \
-			SWD_DP_ABORT_ORUNERRCLR|SWD_DP_ABORT_WDERRCLR \
-			|SWD_DP_ABORT_STKERRCLR|SWD_DP_ABORT_STKCMPCLR);
+			ORUNERRCLR|WDERRCLR|STKERRCLR|STKCMPCLR);
 	     if (retval != ERROR_OK)
      	     return retval;
      } else {
@@ -1181,6 +1245,8 @@ int ahbap_debugport_init(struct adiv5_dap *dap)
 	if (retval != ERROR_OK)
 		return retval;
 
+	// We want to power on the core and debug, also reset them in case they were active.
+//	dap->dp_ctrl_stat = CDBGPWRUPREQ | CSYSPWRUPREQ | CDBGRSTREQ;
 	dap->dp_ctrl_stat = CDBGPWRUPREQ | CSYSPWRUPREQ;
 	retval = dap_queue_dp_write(dap, DP_CTRL_STAT, dap->dp_ctrl_stat);
 	if (retval != ERROR_OK)
@@ -1192,18 +1258,7 @@ int ahbap_debugport_init(struct adiv5_dap *dap)
 	if ((retval = dap_run(dap)) != ERROR_OK)
 		return retval;
 
-	/* Check that we have debug power domains activated */
-	while (!(ctrlstat & CDBGPWRUPACK) && (cnt++ < 10))
-	{
-		LOG_DEBUG("DAP: wait CDBGPWRUPACK");
-		retval = dap_queue_dp_read(dap, DP_CTRL_STAT, &ctrlstat);
-		if (retval != ERROR_OK)
-			return retval;
-		if ((retval = dap_run(dap)) != ERROR_OK)
-			return retval;
-		alive_sleep(10);
-	}
-
+	// Wait for System powerup to complete.
 	while (!(ctrlstat & CSYSPWRUPACK) && (cnt++ < 10))
 	{
 		LOG_DEBUG("DAP: wait CSYSPWRUPACK");
@@ -1215,10 +1270,35 @@ int ahbap_debugport_init(struct adiv5_dap *dap)
 		alive_sleep(10);
 	}
 
-	//TC: At this point CDBGPWRUPACK|CSYSPWRUPACK still may not be set!
+	// Wait for Debug Unit powerup to complete.
+	while (!(ctrlstat & CDBGPWRUPACK) && (cnt++ < 20))
+	{
+		LOG_DEBUG("DAP: wait CDBGPWRUPACK");
+		retval = dap_queue_dp_read(dap, DP_CTRL_STAT, &ctrlstat);
+		if (retval != ERROR_OK)
+			return retval;
+		if ((retval = dap_run(dap)) != ERROR_OK)
+			return retval;
+		alive_sleep(10);
+	}
+
+/*	// wait for debug unit reset to complete.
+	while (!(ctrlstat & cdbgrstack) && (cnt++ < 30))
+	{
+		log_debug("dap: wait cdbgrstack");
+		retval = dap_queue_dp_read(dap, dp_ctrl_stat, &ctrlstat);
+		if (retval != error_ok)
+			return retval;
+		if ((retval = dap_run(dap)) != error_ok)
+			return retval;
+		alive_sleep(50);
+	}
+*/
+
+	// At this point CDBGPWRUPACK|CSYSPWRUPACK|CDBGRSTACK still may not be set!
 	// We should not proceed, it may indicate target failure...
 	if (cnt>=10) {
-		LOG_ERROR("CDBGPWRUPACK|CSYSPWRUPACK FLAGS NOT SET IN RESPONSE!");
+		LOG_ERROR("CDBGPWRUPACK|CSYSPWRUPACK|CDBGRSTACK FLAGS NOT SET IN RESPONSE!");
 		return(ERROR_FAIL);
 	}
 
@@ -1233,6 +1313,12 @@ int ahbap_debugport_init(struct adiv5_dap *dap)
 	retval = dap_queue_dp_read(dap, DP_CTRL_STAT, NULL);
 	if (retval != ERROR_OK)
 		return retval;
+
+	retval = dap_queue_dp_write(dap, DP_SELECT, 0);
+	if (retval != ERROR_OK) return retval;
+	retval = dap_run(dap);
+	if (retval != ERROR_OK) return retval;
+
 
 	return ERROR_OK;
 }
